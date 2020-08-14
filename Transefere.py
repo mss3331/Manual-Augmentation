@@ -10,7 +10,7 @@ import pandas
 import time
 import torchvision
 import random
-import compareTwoModel
+#import compareTwoModel
 from torchvision import datasets, models, transforms
 import matplotlib.pyplot as plt
 
