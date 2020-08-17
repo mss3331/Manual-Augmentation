@@ -47,195 +47,6 @@ class ImageFolderWithPaths(datasets.ImageFolder):
         tuple_with_path = (original_tuple + (path,))
         return tuple_with_path
 
-def addAugmentationIndecies(indecies,datasetSize):#if we want to append the correct indecies to the current one we need to know the new indice in the concatenated dataset
-    augmented_indecies = np.add(indecies,datasetSize) # if the training index is 0, then the corresponding augmented index is = 4000
-    new_indecies = []
-    for i in range(len(indecies)):
-        new_indecies.append(indecies[i])
-        new_indecies.append(augmented_indecies[i])
-    return new_indecies
-
-def train_model(model, dataloaders, criterion, optimizer,num_classes,data_sizes_dict, device,phases=['train', 'val'], num_epochs=25, is_inception=False):
-    since = time.time()
-    print(phases)
-    test_acc_history = []
-    test_loss_history = []
-    val_acc_history = []
-    val_loss_history = []
-    train_acc_history = []
-    train_loss_history = []
-    panda_training_validation_testing_results={} # this variable will contains accuracy\losse for each phase in order to replot the experiment
-    predictions_labels_panda_dic = {} # this variable will save the model predictions and the corresponding labels for analysis later
-
-    best_model_wts = copy.deepcopy(model.state_dict())
-
-    best_val_acc = 0.0
-    best_test_acc = 0.0
-    best_epoch_num = -1
-    co_occurence_val  = np.zeros((num_classes,num_classes))
-    co_occurence_test = np.zeros((num_classes,num_classes))
-    val_prec_rec_fs_support = (0,0,0,None)
-    test_prec_rec_fs_support = (0,0,0,None)
-
-    result_panda_dic = {}#this dictionary will save the important results and it will be saved using panda.
-    skip_testSets_flag = True # this flag will make the model either skip or classify the testing set (we only need to know the accuracy of the testing sets if validation reached the highest accuracy)
-    for epoch in range(num_epochs):
-        print('Epoch {}/{}'.format(epoch, num_epochs - 1))
-        print('-' * 10)
-
-        # Each epoch has a training and validation phase
-        for phase in phases:
-            if phase != 'train' and phase!= 'val' and phase!= 'test1' and skip_testSets_flag:# if all false, don't get the test sets results to save some time
-                #these lines are added before to skip testing the test sets is to make the panda file consistent (i.e. same number of rows)
-                if (phase + '_loss') in panda_training_validation_testing_results:
-                    panda_training_validation_testing_results[(phase + '_loss')].append(-1)
-                    panda_training_validation_testing_results[(phase + '_accuracy')].append(-1)
-                else:
-                    panda_training_validation_testing_results[(phase + '_loss')] = [-1]
-                    panda_training_validation_testing_results[(phase + '_accuracy')] = [-1]
-                continue
-            if phase == 'train':
-                model.train()  # Set model to training mode
-            else:
-                model.eval()   # Set model to evaluate mode
-
-            running_loss = 0.0
-            running_corrects = 0
-            co_occurence = np.zeros((num_classes,num_classes))
-            all_predections = []
-            all_labels = []
-            batch = 0
-            # Iterate over data.
-            for inputs, labels in dataloaders[phase]:
-                all_labels = np.concatenate((all_labels,labels.data))
-                batch += 1
-                if phase == "train" and batch==11:
-                    imshow(inputs)
-                    batch=12
-                #     exit(0)
-                inputs = inputs.to(device)
-                labels = labels.to(device)
-
-                # zero the parameter gradients
-                optimizer.zero_grad()
-
-                # forward
-                # track history if only in train
-                with torch.set_grad_enabled(phase == 'train'):
-                    # Get model outputs and calculate loss
-                    # Special case for inception because in training it has an auxiliary output. In train
-                    #   mode we calculate the loss by summing the final output and the auxiliary output
-                    #   but in testing we only consider the final output.
-                    if is_inception and phase == 'train':
-                        # From https://discuss.pytorch.org/t/how-to-optimize-inception-model-with-auxiliary-classifiers/7958
-                        outputs, aux_outputs = model(inputs)
-                        loss1 = criterion(outputs, labels)
-                        loss2 = criterion(aux_outputs, labels)
-                        loss = loss1 + 0.4*loss2
-                    else:
-                        outputs = model(inputs)
-                        loss = criterion(outputs, labels)
-
-                    _, preds = torch.max(outputs, 1)
-
-                    # backward + optimize only if in training phase
-                    if phase == 'train':
-                        loss.backward()
-                        optimizer.step()
-
-                # statistics
-                running_loss += loss.item() * inputs.size(0)
-                running_corrects += torch.sum(preds == labels.data)
-                all_predections = np.concatenate((all_predections, preds.cpu().data))
-
-                if phase != 'train':#fill the co_occurence only for val and test
-                    co_occurence=fill_co_occurence(pred=preds.cpu().numpy(),label=labels.cpu().numpy(), co_occurence=co_occurence)
-
-
-            #epoch_loss = running_loss / len(dataloaders[phase].dataset)
-            #epoch_acc = running_corrects.double() / len(dataloaders[phase].dataset)
-            epoch_loss = running_loss / data_sizes_dict[phase]
-            epoch_acc = running_corrects.double() / data_sizes_dict[phase]
-            #print(phase, len(dataloaders[phase].dataset))
-
-            print('{} Loss: {:.4f} Acc: {:.4f}'.format(phase, epoch_loss, epoch_acc))
-
-            #save all results in a panda file later
-            if (phase+'_loss') in panda_training_validation_testing_results:
-                panda_training_validation_testing_results[(phase+'_loss')].append(epoch_loss)
-                panda_training_validation_testing_results[(phase+'_accuracy')].append(epoch_acc.item())
-            else:
-                panda_training_validation_testing_results[(phase + '_loss')]=[epoch_loss]
-                panda_training_validation_testing_results[(phase + '_accuracy')]=[epoch_acc.item()]
-
-            targeted_val_accuracy = 0.7  # this will control the frequency in which we test our model to test2 test3 ...etc
-            # deep copy the model
-            if phase == 'val' and epoch_acc > best_val_acc:
-                best_val_acc = epoch_acc
-                best_epoch_num = epoch
-                co_occurence_val = co_occurence
-                best_model_wts = copy.deepcopy(model.state_dict())
-                best_optimizer_wts = copy.deepcopy(optimizer.state_dict())
-                val_prec_rec_fs_support = sk.precision_recall_fscore_support(all_labels, all_predections,average='macro')
-                if best_val_acc>=targeted_val_accuracy:
-                    skip_testSets_flag = False # we can put here extra if condition to check if we reached 75% validation accuracy
-                result_panda_dic['train_accuracy'] = train_acc_history[-1].item()
-                result_panda_dic['val_accuracy'] = best_val_acc.item()
-                result_panda_dic['val_prec_rec_fs_support'] = str(val_prec_rec_fs_support[:-1])
-            elif phase == 'val':
-                skip_testSets_flag = True
-
-            if phase == 'test1' and best_epoch_num == epoch:
-                best_test_acc = epoch_acc
-                co_occurence_test = co_occurence
-                test_prec_rec_fs_support = sk.precision_recall_fscore_support(all_labels, all_predections, average='macro')
-                result_panda_dic['test1_accuracy'] = best_test_acc.item()
-                result_panda_dic['test1_prec_rec_fs_support'] = str(test_prec_rec_fs_support[:-1])
-            if phase != 'train' and phase!= 'val' and phase!= 'test1':# we will reach here only if skip_testSets_flag = True (i.e. validation has a new high accuracy)
-                result_panda_dic[phase+'_accuracy'] = epoch_acc.item()
-                result_panda_dic[phase+'_prec_rec_fs_support'] = str(sk.precision_recall_fscore_support(all_labels, all_predections, average='macro')[:-1])
-
-            if phase != 'train' and best_epoch_num == epoch:#for val\test1\test2 .... save the model predictions and labels in order to analyze them later
-                predictions_labels_panda_dic[phase + '_predictions'] = all_predections
-                predictions_labels_panda_dic[phase + '_labels'] = all_labels
-
-
-            if phase == 'train':
-                train_acc_history.append(epoch_acc)
-                train_loss_history.append(epoch_loss)
-            if phase == 'val':
-                val_acc_history.append(epoch_acc)
-                val_loss_history.append(epoch_loss)
-            if phase == 'test1':
-                test_acc_history.append(epoch_acc)
-                test_loss_history.append(epoch_loss)
-
-
-        print()
-
-    time_elapsed = time.time() - since
-    print('Training complete in {:.0f}m {:.0f}s'.format(time_elapsed // 60, time_elapsed % 60))
-    print('Best val Acc: {:4f}'.format(best_val_acc))
-    result_panda_dic['best_Epoch']=best_epoch_num
-
-    # load best model weights
-    #model.load_state_dict(best_model_wts)
-    model=None
-    result = {'model':model,
-              'test_acc_history': test_acc_history,'test_loss_history': test_loss_history,
-              'co_occurence_test': co_occurence_test,
-              'test_prec_rec_fs_support':test_prec_rec_fs_support[:-1],
-              'val_acc_history':val_acc_history,'val_loss_history': val_loss_history,
-              'co_occurence_val':co_occurence_val,
-              'val_prec_rec_fs_support':val_prec_rec_fs_support[:-1],
-              'train_acc_history': train_acc_history,'train_loss_history':train_loss_history,
-              'best_val_acc': best_val_acc,'best_test_acc':best_test_acc,'best_epoch_num': best_epoch_num,
-              'result_panda_dic':result_panda_dic,
-              'predictions_labels_panda_dic':predictions_labels_panda_dic,
-              'best_model_wts':best_model_wts,
-              'best_optimizer_wts':best_optimizer_wts}
-
-    return result,panda_training_validation_testing_results
 
 def set_parameter_requires_grad(model, feature_extracting):
     if feature_extracting:
@@ -312,79 +123,6 @@ def initialize_model(model_name, num_classes, feature_extract, use_pretrained=Tr
         exit()
 
     return model_ft, input_size
-
-def load_data_pytorchVersion(data_dir, batch_size, input_size):
-    # Data augmentation and normalization for training
-    # Just normalization for validation
-    data_transforms = {
-        'train': transforms.Compose([
-            transforms.Resize(input_size),
-            transforms.CenterCrop(input_size),
-            transforms.ToTensor(),
-            transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
-
-
-        ]),
-        'val': transforms.Compose([
-            transforms.Resize(input_size),
-            transforms.CenterCrop(input_size),
-            transforms.ToTensor(),
-            transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
-        ]),
-    }
-
-    print("Initializing Datasets and Dataloaders...")
-
-    # Create training and validation datasets
-    image_datasets = {x: datasets.ImageFolder(os.path.join(data_dir, x), data_transforms[x]) for x in ['train', 'val']}
-    # Create training and validation dataloaders
-    dataloaders_dict = {
-        x: torch.utils.data.DataLoader(image_datasets[x], batch_size=batch_size, shuffle=True, num_workers=4) for x in
-        ['train', 'val']}
-
-
-    return dataloaders_dict
-
-def load_dataset_randomSplit(image_path, input_size, subset_sizes =[3600,400],batch_size=16, num_workers=4):
-    # this function load a data set and split it into subsets (i.e. train\test)
-    # the number of subsets depends on the len(subset_sizes) if subset_sizes = [1000, 500], then
-    # there will be train_loader1 and train_loader2 with size 1000 and 500, respectively.
-
-    dataset = datasets.ImageFolder(
-        root=image_path,
-        transform=transforms.Compose([
-            transforms.Resize(input_size),
-            transforms.CenterCrop(input_size),
-            transforms.ToTensor(),
-            transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
-        ])
-    )
-
-    #split the entire dataset into train\test loaders
-    train, test = torch.utils.data.random_split(dataset, subset_sizes)
-    size_training = len(train)
-    size_testing = len(test)
-    print('training images:', len(train))
-    print('test images:', len(test))
-
-    train_loader = torch.utils.data.DataLoader(
-        train,
-        batch_size=batch_size,
-        num_workers=num_workers,
-        shuffle=True
-    )
-    test_loader = torch.utils.data.DataLoader(
-        test,
-        batch_size=batch_size,
-        num_workers=num_workers,
-        shuffle=True
-    )
-    dataloaders_dict = {'train': train_loader,
-                        'val': test_loader}
-    dataSize_dict = {'train': size_training,
-                     'val': size_testing}
-
-    return dataloaders_dict, dataSize_dict
 
 def which_parameter_to_optimize(model_ft, feature_extract, print_names=False):
     # Gather the parameters to be optimized/updated in this run. If we are
@@ -475,111 +213,6 @@ def save_model(title, net):
                           transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
                           '''
 
-def load_sampleDataset(image_path, input_size, subset_sizes =[40,40, 3920],batch_size=10, num_workers=2):
-    # this function load 40 images train and 40 images test just for fast testing
-
-    dataset = datasets.ImageFolder(
-        root=image_path,
-        transform=transforms.Compose([
-            transforms.Resize(input_size),
-            transforms.CenterCrop(input_size),
-            transforms.ToTensor(),
-            transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
-        ])
-    )
-
-    #split the entire dataset into train\test loaders
-    train, test, dump = torch.utils.data.random_split(dataset, subset_sizes)
-    size_training = len(train)
-    size_testing = len(test)
-    print('training images:', len(train))
-    print('test images:', len(test))
-
-    train_loader = torch.utils.data.DataLoader(
-        train,
-        batch_size=batch_size,
-        num_workers=num_workers,
-        shuffle=True
-    )
-    test_loader = torch.utils.data.DataLoader(
-        test,
-        batch_size=batch_size,
-        num_workers=num_workers,
-        shuffle=True
-    )
-    dataloaders_dict = {'train': train_loader,
-                        'val': test_loader}
-    dataSize_dict = {'train': size_training,
-                     'val': size_testing}
-
-    return dataloaders_dict, dataSize_dict
-
-def load_dataset_randomSplit_WithAugmentation(image_path, input_size, val_percentage=0.1, shuffle = False):
-    batch_size = 40
-    num_workers = 4
-    pin_memory = True
-    train_dataset = datasets.ImageFolder(
-        root=image_path,
-        transform=transforms.Compose([
-            transforms.Resize(input_size),
-            transforms.CenterCrop(input_size),
-            transforms.ToTensor(),
-            transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
-        ])
-    )
-    test_dataset = datasets.ImageFolder(
-        root=image_path,
-        transform=transforms.Compose([
-            transforms.Resize(input_size),
-            transforms.CenterCrop(input_size),
-            transforms.ToTensor(),
-            transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
-        ])
-    )
-
-    num_train = len(train_dataset)
-    indices = list(range(num_train))
-    split = int(np.floor(val_percentage * num_train))
-
-    if shuffle:
-        np.random.seed(int(np.random.rand()*10))
-        np.random.shuffle(indices)
-    print(indices)
-    exit(0)
-    train_idx, valid_idx = indices[split:], indices[:split]
-    train_sampler = SubsetSampler(train_idx)
-    valid_sampler = SubsetRandomSampler(valid_idx)
-
-    train_loader = torch.utils.data.DataLoader(
-        train_dataset, batch_size=batch_size, sampler=train_sampler,
-        num_workers=num_workers, pin_memory=pin_memory,
-    )
-    valid_loader = torch.utils.data.DataLoader(
-        test_dataset, batch_size=batch_size, sampler=valid_sampler,
-        num_workers=num_workers, pin_memory=pin_memory,
-    )
-
-    # visualize some images
-    if False:
-        sample_loader = torch.utils.data.DataLoader(
-            train_dataset, batch_size=batch_size, shuffle=shuffle,
-            num_workers=4,
-        )
-        data_iter = iter(sample_loader)
-        images, labels = data_iter.next()
-
-    size_training = len(train_sampler)
-    size_testing = len(valid_sampler)
-    print('training images:', size_training)
-    print('test images:', size_testing)
-    #print(len(train_loader.dataset))
-    dataloaders_dict = {'train': train_loader,
-                        'val': valid_loader}
-    dataSize_dict = {'train': size_training,
-                     'val': size_testing}
-
-    return dataloaders_dict, dataSize_dict
-
 def load_dataset_general(train_dataset,train_dataset_not_augmented, valid_test_dataset, sampler_dic,concatenate_dataset,batch_size):
     '''sampler_dic should contain train_sampler, valid_sampler, test_sampler_1, test_sampler_2 ...'''
     #batch_size = 50
@@ -636,55 +269,7 @@ def load_dataset_general(train_dataset,train_dataset_not_augmented, valid_test_d
     #show_sample_images(train_loader)
 
     return list(dataloaders_dict.keys()),  dataloaders_dict, dataSize_dict
-def load_dataset_general_offline(train_valid_test_dataset_dic,train_sampler, concatenate=False):
-    '''train_valid_test_dataset_dic should contain val, test1, test2 datasets..'''
-    batch_size = 50
-    num_workers = 4
-    pin_memory = True
-    dataloaders_dict = {}
-    dataSize_dict = {}
-    train_dataset = train_valid_test_dataset_dic['train']
-    size_training = len(train_dataset)
-    if concatenate:
-        train_dataset = ConcatDataset([train_dataset,train_dataset,train_dataset])
-        size_training = len(train_dataset)*3
 
-
-    train_loader = torch.utils.data.DataLoader(
-        train_dataset, batch_size=batch_size,
-        num_workers=num_workers, pin_memory=pin_memory, sampler=train_sampler
-    )
-    valid_loader = torch.utils.data.DataLoader(
-        train_valid_test_dataset_dic['val'], batch_size=batch_size,
-        num_workers=num_workers, pin_memory=pin_memory,
-    )
-
-
-    print('training images:', size_training)
-    size_valid = len(train_valid_test_dataset_dic['val'])
-    print('valid images:', size_valid)
-
-    dataloaders_dict['train'] = train_loader
-    dataloaders_dict['val'] = valid_loader
-    dataSize_dict['train'] = size_training
-    dataSize_dict['val'] = size_valid
-
-    counter = 1
-    for key in train_valid_test_dataset_dic:
-        if key == 'train' or key == 'val':
-            continue
-        size_test = len(train_valid_test_dataset_dic[key])
-        print(key+' images:', size_test)
-        loader =torch.utils.data.DataLoader(train_valid_test_dataset_dic[key], batch_size=batch_size,num_workers=num_workers, pin_memory=pin_memory)
-        dataloaders_dict['test'+str(counter)]= loader
-        dataSize_dict['test'+str(counter)] = len(train_valid_test_dataset_dic[key])
-        counter+=1
-
-
-
-    #show_sample_images(train_loader)
-
-    return list(dataloaders_dict.keys()),  dataloaders_dict, dataSize_dict
 def getSampler(num_train, train_percentage, shuffle, dataset_num, val_percentage,concatenate_dataset=False, read_from_file=None, number_of_test_sets=10):
     '''
     Get Sampler will create list of indecies in order to be fed to the sampler.
@@ -758,52 +343,13 @@ def getSampler(num_train, train_percentage, shuffle, dataset_num, val_percentage
 
 
     return all_samplers_dic
-def getSamplerOffline(train_percentage, dataset_num,online_class_size_list,offline_class_size_list,
-                      original2augmented_ratio=(0,1),read_from_file=None):
-    offline_training_indecies = []  # the target indecies after mapping
-    #get the online indecies
-    if read_from_file:# True means that there are predefined indices in a folder
-        df = pandas.read_csv(read_from_file, dtype='int')
-        indecies = df['Dataset'+str(dataset_num)].values
-        print('Reading database indecies from file '+read_from_file)
-    else:
-        print('Error, No file to read indecies from. I need a list of indecies in order to create offline training sampler')
-        exit(-1)
-
-    split_training_val = int(np.floor(train_percentage * len(indecies))) # number of images for the training
-    online_training_indecies = indecies[:split_training_val]# extract training indeces from the list
-
-    starting_index_for_each_class = offline_class_size_list #this list will track indecies of each class
-    del starting_index_for_each_class[-1]
-    starting_index_for_each_class =[0] + starting_index_for_each_class
-    starting_index_for_each_class = list(np.cumsum(starting_index_for_each_class)) # for Kvasir the result would be [0, 500, 1000, 1500, 2000, 2500, 3000, 3500]
-
-
-
-    for index in online_training_indecies:#map from online indecies to offline indecies
-        class_index = getClassNumber(online_class_size_list, target_index=index) #for KvasirV1 if index = 969 the return value should be 1
-        offline_training_indecies.append(starting_index_for_each_class[class_index])
-        # offline_training_indecies.append(starting_index_for_each_class[class_index]+1)
-        # offline_training_indecies.append(starting_index_for_each_class[class_index]+2)
-        # offline_training_indecies.append(starting_index_for_each_class[class_index]+3)
-        # starting_index_for_each_class[class_index] = starting_index_for_each_class[class_index] +4
-        #starting_index_for_each_class[class_index] = starting_index_for_each_class[class_index] +2
-        starting_index_for_each_class[class_index] = starting_index_for_each_class[class_index] +1
-    print("starting ending for each class is ",starting_index_for_each_class)
-    train_sampler = SubsetSampler(offline_training_indecies)
-    return train_sampler
-def getClassNumber(class_size_list,target_index):
-    class_number = None
-    for i,num_images in enumerate(class_size_list):
-        class_number = i
-        if target_index - num_images < 0: # num_images -1 to make the counting start at 0 so that 500+1 = 501 belong to class 1 instead of 0
-            return class_number
-        target_index = target_index - num_images
-    if target_index>=0:
-        print("Error index out of bound: there is no class {} in the class_size_list".format(class_number+1))
-        exit(-1)
-
-    return class_number
+def addAugmentationIndecies(indecies,datasetSize):#if we want to append the correct indecies to the current one we need to know the new indice in the concatenated dataset
+    augmented_indecies = np.add(indecies,datasetSize) # if the training index is 0, then the corresponding augmented index is = 4000
+    new_indecies = []
+    for i in range(len(indecies)):
+        new_indecies.append(indecies[i])
+        new_indecies.append(augmented_indecies[i])
+    return new_indecies
 
 def show_sample_images(dataloader, num_images=5):
     if dataloader!=None:
@@ -900,9 +446,9 @@ def train_model_manual_augmentation(model, dataloaders, criterion, optimizer,num
                 all_labels = np.concatenate((all_labels,labels.data))
                 if phase == "train":
                     inputs, random_index = augmentBatch(inputs, augmentation_type,random_numbers,random_index)
-                # if phase == "train" and batch==0:
-                #     imshow(inputs,num_images=3)
-                #     batch=1
+                if phase == "train" and batch==0:
+                    imshow(inputs,num_images=3)
+                    batch=1
                 #     exit(0)
                 inputs = inputs.to(device)
                 labels = labels.to(device)
