@@ -1,19 +1,18 @@
 import time
 import copy
 import torch
-import os
-import matplotlib.pyplot as plt
 import numpy as np
 import sklearn.metrics as sk
 import pandas
 import random
+import Data_Related_Methods
 from torch import nn
 from torchvision import models, transforms, datasets
 from torch.utils.data.sampler import SubsetRandomSampler
 from torch.utils.data import ConcatDataset
 import torchvision.transforms.functional as TF
 from torch.utils.data.sampler import SequentialSampler
-from matplotlib.ticker import MultipleLocator
+
 
 class SubsetSampler(torch.utils.data.SubsetRandomSampler):
     r"""Samples elements randomly from a given list of indices, without replacement.
@@ -148,70 +147,6 @@ def which_parameter_to_optimize(model_ft, feature_extract, print_names=False):
 
     return params_to_update
 
-def plot(loss_history, accuracy_history, num_epochs, phase, color, file_title,title, show=False, save=False, clear_fig=False):
-    # Plot the training curves of validation accuracy vs. number
-    #  of training epochs for the transfer learning method and
-    #  the model trained from scratch
-
-    plt.title(title)
-    plt.xlabel("Training Epochs")
-    plt.ylabel("Validation Accuracy")
-    plt.plot(range(1, num_epochs +1), loss_history, color, label=phase + " Loss")
-    plt.plot(range(1, num_epochs +1), accuracy_history, "--"+color, label=phase + " Accuracy")
-    plt.ylim((0, 1.1))
-    plt.xticks(np.arange(1, num_epochs +1, 40.0))
-    plt.yticks(np.arange(0, 1.1, 0.05))
-    plt.grid(True)
-    #plt.legend()
-    if save:
-        plt.savefig("./Figures/RandomSplit/"+file_title+".png")
-    if show: plt.show()
-    if clear_fig: plt.clf()
-
-def save2text(dic,title,Vertical=True):
-
-
-    # save the accuracy\loss of the training\testing to .csv file
-    # np.random.seed(0)
-    # arr1 = np.asarray(arr1).reshape(-1,1)
-    # arr2 = np.asarray(arr2).reshape(-1,1)
-    # arr3 = np.asarray(arr3).reshape(-1,1)
-    # arr4 = np.asarray(arr4).reshape(-1,1)
-    header = ''
-    result = []
-    for i,key in enumerate(dic):
-        data = dic[key]
-        data = np.asarray(data)
-        result.append(data)
-        header +=key+','
-
-    #all = np.concatenate((arr1,arr2,arr3,arr4),1)
-    if Vertical:
-        result = np.transpose(result)
-    np.savetxt("./Figures/RandomSplit/"+title+".csv", result, header=header,delimiter=',',fmt='%f')
-
-def save2text_co_occurence(dic,title,fmt='%d'):
-    '''This function is writting specifically for saving multiple co-occurence matrices for validation and test sets
-    '''
-    header = ''
-    result = []
-    for i,key in enumerate(dic):
-        data = dic[key]
-        result.append(data)
-        header +=key+','
-
-    np.savetxt("./Figures/RandomSplit/"+title+".csv", np.concatenate(result,1), header=header,delimiter=',',fmt=fmt)
-
-def save_model(title, net):
-    PATH = "./Figures/RandomSplit/"+title + '.pth'
-    torch.save(net.state_dict(), PATH)
-
-    '''
-                          transforms.RandomResizedCrop(input_size),
-                          transforms.RandomHorizontalFlip(),
-                          transforms.ToTensor(),
-                          transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
-                          '''
 
 def load_dataset_general(train_dataset,train_dataset_not_augmented, valid_test_dataset, sampler_dic,concatenate_dataset,batch_size):
     '''sampler_dic should contain train_sampler, valid_sampler, test_sampler_1, test_sampler_2 ...'''
@@ -234,12 +169,6 @@ def load_dataset_general(train_dataset,train_dataset_not_augmented, valid_test_d
         num_workers=num_workers, pin_memory=pin_memory,shuffle= False
     )
 
-    #datas = iter(train_loader)
-    #data, label = datas.next()
-    #imshow(data)
-    #print(label)
-    #print(sampler_dic['train_sampler'].indices[0:2])
-    #exit(0)
     print("Concat Dataset length = "+str(len(train_loader.sampler)))
     size_training = len(sampler_dic['train_sampler'])
     print('training images:', size_training)
@@ -299,15 +228,8 @@ def getSampler(num_train, train_percentage, shuffle, dataset_num, val_percentage
 
     if read_from_file:# True means that there are predefined indices in a folder
         df = pandas.read_csv(read_from_file, dtype='int')
-        #loaded_indecies = np.loadtxt(fname='dataset1_dataset2_KvasirV1.csv',delimiter =' ', dtype='int')
-        #indices = loaded_indecies[dataset_num-1]
-        #print('the maximum number in Dataset'+str(dataset_num)+'=',min(indices))
         indices = df['Dataset'+str(dataset_num)].values
-        #print('the maximum=',max(indices))
-        #indices = indices[:,1]
-        #print((indices[:10]))
         print('Reading database indecies from file '+read_from_file)
-
 
     # save the current dataset indices
     if not read_from_file:
@@ -350,30 +272,6 @@ def addAugmentationIndecies(indecies,datasetSize):#if we want to append the corr
         new_indecies.append(indecies[i])
         new_indecies.append(augmented_indecies[i])
     return new_indecies
-
-def show_sample_images(dataloader, num_images=5):
-    if dataloader!=None:
-        data_iter = iter(dataloader)
-        images, labels = data_iter.next()
-        for i in range(num_images):
-            imshow(images[i])
-def imshow(imgs,normalize=True,num_images=1):
-    #plot input tensor image
-    #print(img.size())
-    # visualize some images
-    from_tensor_to_pillo = transforms.ToPILImage()
-    for i in range(num_images):
-        img = imgs[i]
-        if normalize:
-            img = from_tensor_to_pillo(img*0.225 + 0.47)
-        else:
-            img = from_tensor_to_pillo(img)
-        img.show()
-
-def fill_co_occurence(pred,label,co_occurence):
-    for i,data in enumerate(pred):
-        co_occurence[pred[i]][label[i]] += 1
-    return co_occurence
 
 def get_variouse_datasets_loaders(train_dataset,train_dataset_not_augmented,valid_test_dataset,samplers_dic_list,concatenate_dataset,batch_size):
     '''train_dataset is the imageFolder that contains the augmented set
@@ -446,9 +344,9 @@ def train_model_manual_augmentation(model, dataloaders, criterion, optimizer,num
                 all_labels = np.concatenate((all_labels,labels.data))
                 if phase == "train":
                     inputs, random_index = augmentBatch(inputs, augmentation_type,random_numbers,random_index)
-                if phase == "train" and batch==0:
-                    imshow(inputs,num_images=3)
-                    batch=1
+                # if phase == "train" and batch==0:
+                #     Data_Related_Methods.imshow(inputs,num_images=3)
+                #     batch=1
                 #     exit(0)
                 inputs = inputs.to(device)
                 labels = labels.to(device)
@@ -486,7 +384,7 @@ def train_model_manual_augmentation(model, dataloaders, criterion, optimizer,num
                 all_predections = np.concatenate((all_predections, preds.cpu().data))
 
                 if phase != 'train':#fill the co_occurence only for val and test
-                    co_occurence=fill_co_occurence(pred=preds.cpu().numpy(),label=labels.cpu().numpy(), co_occurence=co_occurence)
+                    co_occurence=Data_Related_Methods.fill_co_occurence(pred=preds.cpu().numpy(),label=labels.cpu().numpy(), co_occurence=co_occurence)
 
 
             #epoch_loss = running_loss / len(dataloaders[phase].dataset)

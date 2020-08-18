@@ -8,6 +8,7 @@ import copy
 import numpy as np
 import pandas
 import time
+import Data_Related_Methods
 import torchvision
 import random
 #import compareTwoModel
@@ -69,21 +70,21 @@ def runManualAugmentation(variouse_datasets_loader, augmentaionType, model, num_
                           "_epochs" + str(num_epochs) + "_featureExtraction" + str(feature_extract)
 
 
-        helpers.plot(results['val_loss_history'], results['val_acc_history'],
+        Data_Related_Methods.plot(results['val_loss_history'], results['val_acc_history'],
                      file_title=parameters_used,
                      title=augmentaionType,
                      color="r",
                      num_epochs=num_epochs,
                      phase="val",
                      show=False)
-        helpers.plot(results['test_loss_history'], results['test_acc_history'],
+        Data_Related_Methods.plot(results['test_loss_history'], results['test_acc_history'],
                      file_title=parameters_used,
                      title=augmentaionType,
                      color="g",
                      num_epochs=num_epochs,
                      phase="test",
                      show=False)
-        helpers.plot(results['train_loss_history'], results['train_acc_history'],
+        Data_Related_Methods.plot(results['train_loss_history'], results['train_acc_history'],
                      file_title=parameters_used,
                      title=augmentaionType,
                      color="b",
@@ -110,16 +111,16 @@ def runManualAugmentation(variouse_datasets_loader, augmentaionType, model, num_
     best_accuracies_dic = {'best_val_accuracies': best_val_accuracies,
                            'corres_test_accuracies': corres_test_accuracies,
                            'Epoch_number': best_epochs}
-    helpers.save2text(best_accuracies_dic, title=parameters_used)
+    Data_Related_Methods.save2text(best_accuracies_dic, title=parameters_used)
 
     best_co_occurences_dic = {'best_val_co_occurences': np.concatenate(best_val_co_occurence).squeeze(),
                               'corres_test_co_occurence': np.concatenate(corres_test_co_occurence).squeeze()}
-    helpers.save2text_co_occurence(best_co_occurences_dic, title='co_occurences_' + parameters_used)
+    Data_Related_Methods.save2text_co_occurence(best_co_occurences_dic, title='co_occurences_' + parameters_used)
 
     best_reports_dic = {'best_val_prec_rec_fs_support': np.reshape(best_val_prec_rec_fs_support, (-1, 3)),
                         'corres_test_prec_rec_fs_support': np.reshape(corres_test_prec_rec_fs_support, (-1, 3))
                         }
-    helpers.save2text_co_occurence(best_reports_dic, title='prec_rec_fs_supp_' + parameters_used, fmt='%f')
+    Data_Related_Methods.save2text_co_occurence(best_reports_dic, title='prec_rec_fs_supp_' + parameters_used, fmt='%f')
 
 def get_dataset_withSpecificTransform(input_size, data_dir, specific_transform=None):
     '''This function create a dataloader with a specific transform added to the default transforms
@@ -143,13 +144,6 @@ def ManualAugmentationExperiments(batch_size, model_name):
     # Initialize the model for this run
     model, input_size = helpers.getModel(model_name, num_classes, feature_extract, create_new = False ,use_pretrained=False)
 
-    #model, input_size = helpers.initialize_model(model_name, num_classes, feature_extract, use_pretrained=False)
-    # torch.save({"model":model,
-    #             "input_size": input_size},"Models/"+model_name+"_"+str(num_classes)+".tar")
-
-    # -----------------------------Defining our variouse dataloaders ---------------------------------------
-
-    # ---------------------------contructed datasets with a specific transform-------------------------------
     # 1- without Augmentation
     basic_transform = transforms.Compose([transforms.Resize(input_size), transforms.CenterCrop(input_size), transforms.ToTensor()])
     train_dataset_noAugmentation = datasets.ImageFolder(data_dir, transform=basic_transform)
@@ -167,7 +161,6 @@ def ManualAugmentationExperiments(batch_size, model_name):
     # ----------------------------Finish Defining our variouse dataloaders ---------------------------------
     augmentations = ["No_Augmentation Manual Augmentation", "Random Rotation [-180 +180] Resized",
                      "Random Contrast [0.5 2]", "Random Translate [0.3 0.3]"]
-    augmentations = ["Random Rotation [-180 +180] Resized"]
     for augmentation_type in augmentations :
         variouse_datasets_loader=[]
         variouse_datasets_loader, phases = helpers.get_variouse_datasets_loaders(train_dataset_noAugmentation,
@@ -198,7 +191,7 @@ if __name__ == '__main__':
     #   when True we only update the reshaped layer params
     feature_extract = False
     # Number of epochs to train for
-    num_epochs = 4
+    num_epochs = 1
     batch_size = 10
     concatenate_dataset = False
     start = time.time()
