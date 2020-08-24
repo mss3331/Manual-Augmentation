@@ -15,7 +15,7 @@ import random
 from torchvision import datasets, models, transforms
 import matplotlib.pyplot as plt
 
-def runManualAugmentation(variouse_datasets_loader, augmentaionType, model, num_classes,phases=['train', 'val']):
+def runManualAugmentation(variouse_datasets_loader, augmentaionType, model, num_classes,batch_size_dic,phases=['train', 'val']):
 
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     print('training will be in the "' + str(device) + '"')
@@ -30,6 +30,7 @@ def runManualAugmentation(variouse_datasets_loader, augmentaionType, model, num_
     panda_results = {}
     predictions_labels_panda_dic = {}
     exp_num = 0
+    #iterate over each type of experiment (i.e. augmentation_type)
     for key, (dataloaders_dict, data_sizes_dict) in enumerate(variouse_datasets_loader):
         exp_num += 1
         # re-copy the start state
@@ -161,6 +162,8 @@ def ManualAugmentationExperiments(batch_size, model_name):
     # ----------------------------Finish Defining our variouse dataloaders ---------------------------------
     augmentations = ["No_Augmentation Manual Augmentation", "Random Rotation [-180 +180] Resized",
                      "Random Contrast [0.5 2]", "Random Translate [0.3 0.3]"]
+    augmentations = ["Random Rotation [-180 +180] Resized",
+                     "Random Contrast [0.5 2]", "Random Translate [0.3 0.3]"]
     for augmentation_type in augmentations :
         variouse_datasets_loader=[]
         variouse_datasets_loader, phases = helpers.get_variouse_datasets_loaders(train_dataset_noAugmentation,
@@ -168,7 +171,7 @@ def ManualAugmentationExperiments(batch_size, model_name):
                                                                                  valid_test_dataset, samplers_dic_list,
                                                                                  batch_size=batch_size,
                                                                                  concatenate_dataset=concatenate_dataset)
-        runManualAugmentation(variouse_datasets_loader, augmentation_type, model, num_classes, phases=phases)
+        runManualAugmentation(variouse_datasets_loader, augmentation_type, model, num_classes,batch_size_dic= batch_size_dic ,phases=phases)
         torch.manual_seed(0)
 
 if __name__ == '__main__':
@@ -192,10 +195,12 @@ if __name__ == '__main__':
     feature_extract = False
     # Number of epochs to train for
     num_epochs = 1
-    batch_size = 10
+    effective_batch_size = 10
+    target_batch_size = 10
+    batch_size_dic = {"effective_batch_size":effective_batch_size, "target_batch_size":target_batch_size}
     concatenate_dataset = False
     start = time.time()
-    ManualAugmentationExperiments(batch_size,model_name)
+    ManualAugmentationExperiments(batch_size_dic,model_name)
     total_time = time.time() - start
     print('-'*50,'\nThe entire experiments completed in {:.0f}h {:.0f}m'.format(total_time // 60**2, (total_time % 60**2) // 60))
 

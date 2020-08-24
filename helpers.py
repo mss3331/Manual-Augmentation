@@ -161,11 +161,11 @@ def load_dataset_general(train_dataset,train_dataset_not_augmented, valid_test_d
         train_dataset_concat = ConcatDataset([train_dataset, train_dataset_not_augmented])
 
     train_loader = torch.utils.data.DataLoader(
-        train_dataset_concat, batch_size=batch_size, sampler=sampler_dic['train_sampler'],
+        train_dataset_concat, batch_size=batch_size["target_batch_size"], sampler=sampler_dic['train_sampler'],
         num_workers=num_workers, pin_memory=pin_memory, shuffle= False
     )
     valid_loader = torch.utils.data.DataLoader(
-        valid_test_dataset, batch_size=batch_size, sampler=sampler_dic['valid_sampler'],
+        valid_test_dataset, batch_size=batch_size["effective_batch_size"], sampler=sampler_dic['valid_sampler'],
         num_workers=num_workers, pin_memory=pin_memory,shuffle= False
     )
 
@@ -186,7 +186,7 @@ def load_dataset_general(train_dataset,train_dataset_not_augmented, valid_test_d
             continue
         size_test = len(sampler_dic[key])
         print(key+' images:', size_test)
-        loader =torch.utils.data.DataLoader(valid_test_dataset, batch_size=batch_size,
+        loader =torch.utils.data.DataLoader(valid_test_dataset, batch_size=batch_size["effective_batch_size"],
                                             sampler=sampler_dic[key],num_workers=num_workers,
                                             pin_memory=pin_memory,shuffle= False)
         dataloaders_dict['test'+str(counter)]= loader
@@ -308,7 +308,7 @@ def train_model_manual_augmentation(model, dataloaders, criterion, optimizer,num
     co_occurence_test = np.zeros((num_classes,num_classes))
     val_prec_rec_fs_support = (0,0,0,None)
     test_prec_rec_fs_support = (0,0,0,None)
-    random_index = 0
+    magnitude_factors_index = 0 #this index if putted inside the for loop, the experiment would be offline rather than online
     result_panda_dic = {}#this dictionary will save the important results and it will be saved using panda.
     skip_testSets_flag = True # this flag will make the model either skip or classify the testing set (we only need to know the accuracy of the testing sets if validation reached the highest accuracy)
     for epoch in range(num_epochs):
@@ -337,17 +337,18 @@ def train_model_manual_augmentation(model, dataloaders, criterion, optimizer,num
             all_predections = []
             all_labels = []
             batch = 0
-            random_numbers = list(pandas.read_csv('./random_numbers.csv', index_col=0,dtype='float').to_numpy().squeeze())
+            magnitude_factors = list(pandas.read_csv('./random_numbers.csv', index_col=0,dtype='float').to_numpy().squeeze())
 
             # Iterate over data.
             for inputs, labels in dataloaders[phase]:
-                all_labels = np.concatenate((all_labels,labels.data))
+
                 if phase == "train":
-                    inputs, random_index = augmentBatch(inputs, augmentation_type,random_numbers,random_index)
+                    inputs, random_index = augmentBatch(inputs, augmentation_type,magnitude_factors,magnitude_factors_index)
                 # if phase == "train" and batch==0:
                 #     Data_Related_Methods.imshow(inputs,num_images=3)
                 #     batch=1
-                #     exit(0)
+                #     # exit(0)
+                all_labels = np.concatenate((all_labels, labels.data))
                 inputs = inputs.to(device)
                 labels = labels.to(device)
 
@@ -472,21 +473,24 @@ def train_model_manual_augmentation(model, dataloaders, criterion, optimizer,num
 
     return result,panda_training_validation_testing_results
 
-def augmentBatch(tensor_images, augmentation_type, random_numbers, random_index):
+def augmentBatch(tensor_images, augmentation_type, magnitude_factors, magnitude_factors_index):
     image_size = list(tensor_images[0].size()[1:])
     next_random_index=None
     pilo_imgs = [TF.to_pil_image(image) for image in tensor_images] #convert tensor img to pillo
+    #Rotate Images
     if augmentation_type.find("Rotation")>=0:
-        pilo_imgs = [TF.rotate(image,random_numbers[key+random_index]*360,expand=True) for key,image in enumerate(pilo_imgs)]
+        pilo_imgs = [TF.rotate(image,magnitude_factors[key+magnitude_factors_index]*360,expand=True) for key,image in enumerate(pilo_imgs)]
+    #Contrast
     elif augmentation_type.find("Contrast")>=0:
-        pilo_imgs = [TF.adjust_contrast(image,random_numbers[key+random_index]+0.5) for key,image in enumerate(pilo_imgs)]
+        pilo_imgs = [TF.adjust_contrast(image,magnitude_factors[key+magnitude_factors_index]+0.5) for key,image in enumerate(pilo_imgs)]
+    #Translate
     elif augmentation_type.find("Translate")>=0:
-        pilo_imgs = [TF.affine(image,translate=[image_size[0]*random_numbers[key+random_index], image_size[1]*random_numbers[key+random_index]], angle=0, scale=1, shear=0) for key,image in enumerate(pilo_imgs)]
+        pilo_imgs = [TF.affine(image,translate=[image_size[0]*magnitude_factors[key+magnitude_factors_index], image_size[1]*magnitude_factors[key+magnitude_factors_index]], angle=0, scale=1, shear=0) for key,image in enumerate(pilo_imgs)]
     pilo_imgs = [TF.resize(image, image_size) for image in pilo_imgs]
     tensor_images = [TF.to_tensor(image) for image in pilo_imgs]
     tensor_images = [TF.normalize(image,mean=[0.485, 0.456, 0.406],std=[0.229, 0.224, 0.225]) for image in tensor_images]
     tensor_images = torch.stack(tensor_images)
-    next_random_index= random_index + tensor_images.size()[0]
+    next_random_index= magnitude_factors_index + tensor_images.size()[0]
     return tensor_images, next_random_index
 
 def getModel(model_name, num_classes, feature_extract, create_new= False, use_pretrained=False):
