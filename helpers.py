@@ -343,11 +343,11 @@ def train_model_manual_augmentation(model, dataloaders, criterion, optimizer,num
             for inputs, labels in dataloaders[phase]:
 
                 if phase == "train":
-                    inputs, random_index = augmentBatch(inputs, augmentation_type,magnitude_factors,magnitude_factors_index)
-                # if phase == "train" and batch==0:
-                #     Data_Related_Methods.imshow(inputs,num_images=3)
-                #     batch=1
-                #     # exit(0)
+                    inputs, magnitude_factors_index = augmentBatch(inputs, augmentation_type,magnitude_factors,magnitude_factors_index)
+                if phase == "train" and batch==0:
+                    Data_Related_Methods.imshow(inputs,num_images=1)
+                    batch=1
+                    # exit(0)
                 all_labels = np.concatenate((all_labels, labels.data))
                 inputs = inputs.to(device)
                 labels = labels.to(device)

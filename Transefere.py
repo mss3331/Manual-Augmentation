@@ -194,7 +194,7 @@ if __name__ == '__main__':
     #   when True we only update the reshaped layer params
     feature_extract = False
     # Number of epochs to train for
-    num_epochs = 1
+    num_epochs = 3
 
     effective_batch_size = 10
     target_batch_size = 10
