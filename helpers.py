@@ -288,7 +288,7 @@ def get_variouse_datasets_loaders(train_dataset,train_dataset_not_augmented,vali
     return variouse_datasets_loader,phases
 
 def train_model_manual_augmentation(model, dataloaders, criterion, optimizer,num_classes,data_sizes_dict, augmentation_type,
-                                    batch_size_dic,device,phases=['train', 'val'], num_epochs=25, is_inception=False):
+                                    orig_aug_ratio_dic, batch_size_dic,device,phases=['train', 'val'], num_epochs=25, is_inception=False):
     since = time.time()
     print(phases)
     test_acc_history = []
@@ -344,7 +344,8 @@ def train_model_manual_augmentation(model, dataloaders, criterion, optimizer,num
             for inputs, labels in dataloaders[phase]:
 
                 if phase == "train":
-                    inputs, labels, magnitude_factors_index = augmentBatch(inputs, labels, augmentation_type,magnitude_factors,magnitude_factors_index)
+                    inputs, labels, magnitude_factors_index = augmentBatch(inputs, labels, augmentation_type,
+                                                              magnitude_factors,magnitude_factors_index,orig_aug_ratio_dic)
                 # if phase == "train" and batch==0:
                 #     Data_Related_Methods.imshow(inputs,num_images=1)
                 #     batch=1
@@ -482,27 +483,57 @@ def train_model_manual_augmentation(model, dataloaders, criterion, optimizer,num
               'best_optimizer_wts':best_optimizer_wts}
 
     return result,panda_training_validation_testing_results
+def augment(pilo_imgs, augmentation_type,magnitude_factors,magnitude_factors_index):
+    '''Augment the current batch and update aumgentation factors index and return the augmente batch
+    input:
+        -pilo_images
+        -augmentation_type (Rotate,contrast etc)
+        -magnitude_factors array of random numbers
+        -magnitude_factors_index index for the current augmentation factor
+    output:
+        -next_random_index updated index for the upcoming mag factor
+        -list of augmented tensor images'''
+    image_size = pilo_imgs[0].size
 
-def augmentBatch(tensor_images, labels, augmentation_type, magnitude_factors, magnitude_factors_index):
-    image_size = list(tensor_images[0].size()[1:])
-    next_random_index=None
-    pilo_imgs = [TF.to_pil_image(image) for image in tensor_images] #convert tensor img to pillo
-    #Rotate Images
-    if augmentation_type.find("Rotation")>=0:
-        pilo_imgs = [TF.rotate(image,magnitude_factors[key+magnitude_factors_index]*360,expand=True) for key,image in enumerate(pilo_imgs)]
-    #Contrast
-    elif augmentation_type.find("Contrast")>=0:
-        pilo_imgs = [TF.adjust_contrast(image,magnitude_factors[key+magnitude_factors_index]+0.5) for key,image in enumerate(pilo_imgs)]
-    #Translate
-    elif augmentation_type.find("Translate")>=0:
-        pilo_imgs = [TF.affine(image,translate=[image_size[0]*magnitude_factors[key+magnitude_factors_index], image_size[1]*magnitude_factors[key+magnitude_factors_index]], angle=0, scale=1, shear=0) for key,image in enumerate(pilo_imgs)]
+    # Rotate Images
+    if augmentation_type.find("Rotation") >= 0:
+        pilo_imgs = [TF.rotate(image, magnitude_factors[key + magnitude_factors_index] * 360, expand=True) for
+                     key, image in enumerate(pilo_imgs)]
+    # Contrast
+    elif augmentation_type.find("Contrast") >= 0:
+        pilo_imgs = [TF.adjust_contrast(image, magnitude_factors[key + magnitude_factors_index] + 0.5) for key, image in
+                     enumerate(pilo_imgs)]
+    # Translate
+    elif augmentation_type.find("Translate") >= 0:
+        pilo_imgs = [TF.affine(image, translate=[image_size[0] * magnitude_factors[key + magnitude_factors_index],
+                                                 image_size[1] * magnitude_factors[key + magnitude_factors_index]],
+                               angle=0, scale=1, shear=0) for key, image in enumerate(pilo_imgs)]
     pilo_imgs = [TF.resize(image, image_size) for image in pilo_imgs]
-    tensor_images = [TF.to_tensor(image) for image in pilo_imgs]
-    tensor_images = [TF.normalize(image,mean=[0.485, 0.456, 0.406],std=[0.229, 0.224, 0.225]) for image in tensor_images]
-    tensor_images = torch.stack(tensor_images)
+
+
     # What is the index of the augmentation factor for the next upcoming batch
-    next_random_index= magnitude_factors_index + tensor_images.size()[0]
-    return tensor_images,labels, next_random_index
+    next_random_index = magnitude_factors_index + len(pilo_imgs)
+
+    return pilo_imgs, next_random_index
+
+def augmentBatch(tensor_images, labels, augmentation_type, magnitude_factors, magnitude_factors_index,orig_aug_ratio_dic):
+
+    pilo_imgs_orig = [TF.to_pil_image(image) for image in tensor_images] #convert tensor img to pillo
+    pilo_imgs_aug = []
+
+    for i in range(orig_aug_ratio_dic["augmentation"]):
+        pilo_images_temp, magnitude_factors_index = augment(pilo_imgs_orig, augmentation_type,magnitude_factors,magnitude_factors_index)
+        pilo_imgs_aug+=pilo_images_temp
+
+    if (orig_aug_ratio_dic["original"] == 1):
+        pilo_imgs_aug = pilo_imgs_orig + pilo_imgs_aug
+
+    tensor_images = [TF.to_tensor(image) for image in pilo_imgs_aug]
+    tensor_images = [TF.normalize(image, mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]) for image in
+                     tensor_images]
+    tensor_images = torch.stack(tensor_images)
+
+    return tensor_images,labels, magnitude_factors_index
 
 def splitIntoSubBatchs(inputs,labels,batch_size_dic):
     '''This function supposed to solve the problem of low GPU capacity by splitting the current batch into sub_batchs

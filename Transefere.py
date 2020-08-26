@@ -15,7 +15,8 @@ import random
 from torchvision import datasets, models, transforms
 import matplotlib.pyplot as plt
 
-def runManualAugmentation(variouse_datasets_loader, augmentaionType, model, num_classes,batch_size_dic,phases=['train', 'val']):
+def runManualAugmentation(variouse_datasets_loader, augmentaionType, model, num_classes,batch_size_dic,
+                          orig_aug_ratio_dic, phases=['train', 'val']):
 
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     print('training will be in the "' + str(device) + '"')
@@ -46,6 +47,7 @@ def runManualAugmentation(variouse_datasets_loader, augmentaionType, model, num_
                                       num_classes,
                                       batch_size_dic=batch_size_dic,
                                       augmentation_type=augmentaionType,
+                                      orig_aug_ratio_dic=orig_aug_ratio_dic,
                                       data_sizes_dict=data_sizes_dict,
                                       device=device,
                                       num_epochs=num_epochs,
@@ -137,7 +139,7 @@ def get_dataset_withSpecificTransform(input_size, data_dir, specific_transform=N
              transforms.ToTensor(), transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])])
     return datasets.ImageFolder(root=data_dir, transform=transform)
 
-def ManualAugmentationExperiments(batch_size, model_name):
+def ManualAugmentationExperiments(batch_size, model_name,orig_aug_ratio_dic):
     print("Manual Augmentation is running ....")
     #data_dir = "C:/Users/Mahmood_Haithami/Downloads/JDownloader/Databases/KvasirV1_WithBlackBox_HE_0.3GB" # Windows
     data_dir = "C:/Users/Mahmood_Haithami/Downloads/JDownloader/Databases/KvasirV1_Unified" # Windows
@@ -163,7 +165,7 @@ def ManualAugmentationExperiments(batch_size, model_name):
     # ----------------------------Finish Defining our variouse dataloaders ---------------------------------
     augmentations = ["No_Augmentation Manual Augmentation", "Random Rotation [-180 +180] Resized",
                      "Random Contrast [0.5 2]", "Random Translate [0.3 0.3]"]
-    augmentations = ["No_Augmentation Manual Augmentation", "No_Augmentation Manual Augmentation"]
+    augmentations = ["Random Rotation [-180 +180] Resized", "No_Augmentation Manual Augmentation"]
 
     for augmentation_type in augmentations :
         variouse_datasets_loader=[]
@@ -172,7 +174,8 @@ def ManualAugmentationExperiments(batch_size, model_name):
                                                                                  valid_test_dataset, samplers_dic_list,
                                                                                  batch_size=batch_size,
                                                                                  concatenate_dataset=concatenate_dataset)
-        runManualAugmentation(variouse_datasets_loader, augmentation_type, model, num_classes,batch_size_dic= batch_size_dic ,phases=phases)
+        runManualAugmentation(variouse_datasets_loader, augmentation_type, model, num_classes,
+                              batch_size_dic= batch_size_dic ,phases=phases,orig_aug_ratio_dic=orig_aug_ratio_dic)
         torch.manual_seed(0)
 
 if __name__ == '__main__':
@@ -195,16 +198,16 @@ if __name__ == '__main__':
     #   when True we only update the reshaped layer params
     feature_extract = False
     # Number of epochs to train for
-    num_epochs = 1
-
-    effective_batch_size = 2
-    target_batch_size = 12
+    num_epochs = 3
+    orig_aug_ratio_dic={"original":0,"augmentation":1}
+    effective_batch_size = 10
+    target_batch_size = 10
     assert(effective_batch_size<=target_batch_size)
 
     batch_size_dic = {"effective_batch_size":effective_batch_size, "target_batch_size":target_batch_size}
     concatenate_dataset = False
     start = time.time()
-    ManualAugmentationExperiments(batch_size_dic,model_name)
+    ManualAugmentationExperiments(batch_size_dic,model_name,orig_aug_ratio_dic)
     total_time = time.time() - start
     print('-'*50,'\nThe entire experiments completed in {:.0f}h {:.0f}m'.format(total_time // 60**2, (total_time % 60**2) // 60))
 
