@@ -163,6 +163,7 @@ def ManualAugmentationExperiments(batch_size, model_name):
     # ----------------------------Finish Defining our variouse dataloaders ---------------------------------
     augmentations = ["No_Augmentation Manual Augmentation", "Random Rotation [-180 +180] Resized",
                      "Random Contrast [0.5 2]", "Random Translate [0.3 0.3]"]
+    augmentations = ["No_Augmentation Manual Augmentation", "No_Augmentation Manual Augmentation"]
 
     for augmentation_type in augmentations :
         variouse_datasets_loader=[]
@@ -194,10 +195,10 @@ if __name__ == '__main__':
     #   when True we only update the reshaped layer params
     feature_extract = False
     # Number of epochs to train for
-    num_epochs = 3
+    num_epochs = 1
 
-    effective_batch_size = 5
-    target_batch_size = 10
+    effective_batch_size = 2
+    target_batch_size = 12
     assert(effective_batch_size<=target_batch_size)
 
     batch_size_dic = {"effective_batch_size":effective_batch_size, "target_batch_size":target_batch_size}

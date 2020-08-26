@@ -387,7 +387,7 @@ def train_model_manual_augmentation(model, dataloaders, criterion, optimizer,num
                             loss.backward()
 
                     # statistics for each sub_batch
-                    running_loss += loss.item() * inputs.size(0)
+                    running_loss += loss.item() * total_batch_images
                     running_corrects += torch.sum(preds == labels.data)
                     all_predections = np.concatenate((all_predections, preds.cpu().data))
 
