@@ -346,20 +346,25 @@ def train_model_manual_augmentation(model, dataloaders, criterion, optimizer,num
                 if phase == "train":
                     inputs, labels, magnitude_factors_index = augmentBatch(inputs, labels, augmentation_type,
                                                               magnitude_factors,magnitude_factors_index,orig_aug_ratio_dic)
-                # if phase == "train" and batch==0:
-                #     Data_Related_Methods.imshow(inputs,num_images=1)
-                #     batch=1
-                    # exit(0)
+
+
 
                 all_labels = np.concatenate((all_labels, labels.data))
 
                 #split the inputs and the labels into sub_batch and sub_labels inorder to be fed to the GPU
                 sub_batchs_dic = splitIntoSubBatchs(inputs,labels,batch_size_dic)
                 sub_batchs_images, sub_batchs_labels, sub_batchs_averaging_factor, total_batch_images = sub_batchs_dic.values()
-                preds = []
+
+
                 for sub_batch_index, temp_labels in enumerate(sub_batchs_labels):
                     sub_batch_inputs = sub_batchs_images[sub_batch_index]
                     sub_batch_labels = sub_batchs_labels[sub_batch_index]
+                    if phase == "train" and batch<=1:
+                        Data_Related_Methods.imshow(sub_batch_inputs, num_images=5)
+                        batch+=1
+                    else:
+                        exit(0)
+
                     inputs = sub_batch_inputs.to(device)#this line cuase error if I don't have enough space in my GPU
                     labels = sub_batch_labels.to(device)
                     if(sub_batch_index==0):# zero the parameter gradients only before the first sub_batch

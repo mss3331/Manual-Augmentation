@@ -142,8 +142,8 @@ def get_dataset_withSpecificTransform(input_size, data_dir, specific_transform=N
 def ManualAugmentationExperiments(batch_size, model_name,orig_aug_ratio_dic):
     print("Manual Augmentation is running ....")
     #data_dir = "C:/Users/Mahmood_Haithami/Downloads/JDownloader/Databases/KvasirV1_WithBlackBox_HE_0.3GB" # Windows
-    data_dir = "C:/Users/Mahmood_Haithami/Downloads/JDownloader/Databases/KvasirV1_Unified" # Windows
-    #data_dir = "~/Documents/Mahmood/Databases/KvasirV1_Unified"
+    #data_dir = "C:/Users/Mahmood_Haithami/Downloads/JDownloader/Databases/KvasirV1_Unified" # Windows
+    data_dir = "~/Documents/Mahmood/Databases/KvasirV1_Unified"
 
     # Initialize the model for this run
     model, input_size = helpers.getModel(model_name, num_classes, feature_extract, create_new = False ,use_pretrained=False)
@@ -199,9 +199,9 @@ if __name__ == '__main__':
     feature_extract = False
     # Number of epochs to train for
     num_epochs = 3
-    orig_aug_ratio_dic={"original":0,"augmentation":1}
-    effective_batch_size = 10
-    target_batch_size = 10
+    orig_aug_ratio_dic={"original":1,"augmentation":1}
+    effective_batch_size = 5
+    target_batch_size = 5
     assert(effective_batch_size<=target_batch_size)
 
     batch_size_dic = {"effective_batch_size":effective_batch_size, "target_batch_size":target_batch_size}
