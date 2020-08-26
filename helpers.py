@@ -337,7 +337,7 @@ def train_model_manual_augmentation(model, dataloaders, criterion, optimizer,num
             co_occurence = np.zeros((num_classes,num_classes))
             all_predections = []
             all_labels = []
-            batch = 0
+            sub_batch = 0
             magnitude_factors = list(pandas.read_csv('./random_numbers.csv', index_col=0,dtype='float').to_numpy().squeeze())
 
             # Iterate over data.
@@ -359,9 +359,10 @@ def train_model_manual_augmentation(model, dataloaders, criterion, optimizer,num
                 for sub_batch_index, temp_labels in enumerate(sub_batchs_labels):
                     sub_batch_inputs = sub_batchs_images[sub_batch_index]
                     sub_batch_labels = sub_batchs_labels[sub_batch_index]
-                    if phase == "train" and batch<=1:
+                    if phase == "train" and sub_batch<=1:
                         Data_Related_Methods.imshow(sub_batch_inputs, num_images=5)
-                        batch+=1
+                        sub_batch+=1
+                        print(sub_batch_labels)
                     else:
                         exit(0)
 
@@ -525,13 +526,16 @@ def augmentBatch(tensor_images, labels, augmentation_type, magnitude_factors, ma
 
     pilo_imgs_orig = [TF.to_pil_image(image) for image in tensor_images] #convert tensor img to pillo
     pilo_imgs_aug = []
-
+    orig_labels = copy.deepcopy(labels)
     for i in range(orig_aug_ratio_dic["augmentation"]):
         pilo_images_temp, magnitude_factors_index = augment(pilo_imgs_orig, augmentation_type,magnitude_factors,magnitude_factors_index)
         pilo_imgs_aug+=pilo_images_temp
+        if(i>0):
+            labels=torch.cat((orig_labels,labels))
 
     if (orig_aug_ratio_dic["original"] == 1):
         pilo_imgs_aug = pilo_imgs_orig + pilo_imgs_aug
+        labels=torch.cat((orig_labels,labels))
 
     tensor_images = [TF.to_tensor(image) for image in pilo_imgs_aug]
     tensor_images = [TF.normalize(image, mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]) for image in
