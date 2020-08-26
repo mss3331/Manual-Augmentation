@@ -6,6 +6,7 @@ import sklearn.metrics as sk
 import pandas
 import random
 import Data_Related_Methods
+import math
 from torch import nn
 from torchvision import models, transforms, datasets
 from torch.utils.data.sampler import SubsetRandomSampler
@@ -287,7 +288,7 @@ def get_variouse_datasets_loaders(train_dataset,train_dataset_not_augmented,vali
     return variouse_datasets_loader,phases
 
 def train_model_manual_augmentation(model, dataloaders, criterion, optimizer,num_classes,data_sizes_dict, augmentation_type,
-                                    device,phases=['train', 'val'], num_epochs=25, is_inception=False):
+                                    batch_size_dic,device,phases=['train', 'val'], num_epochs=25, is_inception=False):
     since = time.time()
     print(phases)
     test_acc_history = []
@@ -343,55 +344,64 @@ def train_model_manual_augmentation(model, dataloaders, criterion, optimizer,num
             for inputs, labels in dataloaders[phase]:
 
                 if phase == "train":
-                    inputs, magnitude_factors_index = augmentBatch(inputs, augmentation_type,magnitude_factors,magnitude_factors_index)
-                if phase == "train" and batch==0:
-                    Data_Related_Methods.imshow(inputs,num_images=1)
-                    batch=1
+                    inputs, labels, magnitude_factors_index = augmentBatch(inputs, labels, augmentation_type,magnitude_factors,magnitude_factors_index)
+                # if phase == "train" and batch==0:
+                #     Data_Related_Methods.imshow(inputs,num_images=1)
+                #     batch=1
                     # exit(0)
+
                 all_labels = np.concatenate((all_labels, labels.data))
-                inputs = inputs.to(device)
-                labels = labels.to(device)
 
-                # zero the parameter gradients
-                optimizer.zero_grad()
+                #split the inputs and the labels into sub_batch and sub_labels inorder to be fed to the GPU
+                sub_batchs_dic = splitIntoSubBatchs(inputs,labels,batch_size_dic)
+                sub_batchs_images, sub_batchs_labels, sub_batchs_averaging_factor, total_batch_images = sub_batchs_dic.values()
+                preds = []
+                for sub_batch_index, temp_labels in enumerate(sub_batchs_labels):
+                    sub_batch_inputs = sub_batchs_images[sub_batch_index]
+                    sub_batch_labels = sub_batchs_labels[sub_batch_index]
+                    inputs = sub_batch_inputs.to(device)#this line cuase error if I don't have enough space in my GPU
+                    labels = sub_batch_labels.to(device)
+                    if(sub_batch_index==0):# zero the parameter gradients only before the first sub_batch
+                        optimizer.zero_grad()
 
-                # forward
-                # track history if only in train
-                with torch.set_grad_enabled(phase == 'train'):
-                    # Get model outputs and calculate loss
-                    # Special case for inception because in training it has an auxiliary output. In train
-                    #   mode we calculate the loss by summing the final output and the auxiliary output
-                    #   but in testing we only consider the final output.
-                    if is_inception and phase == 'train':
-                        # From https://discuss.pytorch.org/t/how-to-optimize-inception-model-with-auxiliary-classifiers/7958
-                        outputs, aux_outputs = model(inputs)
-                        loss1 = criterion(outputs, labels)
-                        loss2 = criterion(aux_outputs, labels)
-                        loss = loss1 + 0.4*loss2
-                    else:
-                        outputs = model(inputs)
-                        loss = criterion(outputs, labels)
+                    # forward
+                    # track history if only in train
+                    with torch.set_grad_enabled(phase == 'train'):
+                        # Get model outputs and calculate loss
+                        # Special case for inception because in training it has an auxiliary output. In train
+                        #   mode we calculate the loss by summing the final output and the auxiliary output
+                        #   but in testing we only consider the final output.
+                        if is_inception and phase == 'train':
+                            # From https://discuss.pytorch.org/t/how-to-optimize-inception-model-with-auxiliary-classifiers/7958
+                            outputs, aux_outputs = model(inputs)
+                            loss1 = criterion(outputs, labels)
+                            loss2 = criterion(aux_outputs, labels)
+                            loss = (loss1 + 0.4*loss2) * sub_batchs_averaging_factor[sub_batch_index]
+                        else:
+                            outputs = model(inputs)
+                            loss = criterion(outputs, labels) * sub_batchs_averaging_factor[sub_batch_index]
 
-                    _, preds = torch.max(outputs, 1)
+                        _, preds = torch.max(outputs, 1)
+                        # backward + optimize only if in training phase
+                        if phase == 'train':
+                            loss.backward()
 
-                    # backward + optimize only if in training phase
-                    if phase == 'train':
-                        loss.backward()
-                        optimizer.step()
+                    # statistics for each sub_batch
+                    running_loss += loss.item() * inputs.size(0)
+                    running_corrects += torch.sum(preds == labels.data)
+                    all_predections = np.concatenate((all_predections, preds.cpu().data))
 
-                # statistics
-                running_loss += loss.item() * inputs.size(0)
-                running_corrects += torch.sum(preds == labels.data)
-                all_predections = np.concatenate((all_predections, preds.cpu().data))
-
-                if phase != 'train':#fill the co_occurence only for val and test
-                    co_occurence=Data_Related_Methods.fill_co_occurence(pred=preds.cpu().numpy(),label=labels.cpu().numpy(), co_occurence=co_occurence)
-
+                    if phase != 'train':#fill the co_occurence only for val and test
+                        co_occurence=Data_Related_Methods.fill_co_occurence(pred=preds.cpu().numpy(),label=labels.cpu().numpy(), co_occurence=co_occurence)
+                if phase == 'train':
+                    optimizer.step()
 
             #epoch_loss = running_loss / len(dataloaders[phase].dataset)
             #epoch_acc = running_corrects.double() / len(dataloaders[phase].dataset)
-            epoch_loss = running_loss / data_sizes_dict[phase]
-            epoch_acc = running_corrects.double() / data_sizes_dict[phase]
+            # epoch_loss = running_loss / data_sizes_dict[phase]
+            epoch_loss = running_loss / len(all_predections)
+            # epoch_acc = running_corrects.double() / data_sizes_dict[phase]
+            epoch_acc = running_corrects.double() / len(all_predections)
             #print(phase, len(dataloaders[phase].dataset))
 
             print('{} Loss: {:.4f} Acc: {:.4f}'.format(phase, epoch_loss, epoch_acc))
@@ -473,7 +483,7 @@ def train_model_manual_augmentation(model, dataloaders, criterion, optimizer,num
 
     return result,panda_training_validation_testing_results
 
-def augmentBatch(tensor_images, augmentation_type, magnitude_factors, magnitude_factors_index):
+def augmentBatch(tensor_images, labels, augmentation_type, magnitude_factors, magnitude_factors_index):
     image_size = list(tensor_images[0].size()[1:])
     next_random_index=None
     pilo_imgs = [TF.to_pil_image(image) for image in tensor_images] #convert tensor img to pillo
@@ -490,9 +500,29 @@ def augmentBatch(tensor_images, augmentation_type, magnitude_factors, magnitude_
     tensor_images = [TF.to_tensor(image) for image in pilo_imgs]
     tensor_images = [TF.normalize(image,mean=[0.485, 0.456, 0.406],std=[0.229, 0.224, 0.225]) for image in tensor_images]
     tensor_images = torch.stack(tensor_images)
+    # What is the index of the augmentation factor for the next upcoming batch
     next_random_index= magnitude_factors_index + tensor_images.size()[0]
-    return tensor_images, next_random_index
+    return tensor_images,labels, next_random_index
 
+def splitIntoSubBatchs(inputs,labels,batch_size_dic):
+    '''This function supposed to solve the problem of low GPU capacity by splitting the current batch into sub_batchs
+    Input:
+        list of input tensors and list of labels and the target\effetive batch size
+    Output:
+        splitted input\labels into multidimentional array. Each row represent sub_batch with it's label'''
+    averaging_factor_list=[]
+    total_batch_images = labels.size()[0]
+
+    sub_labels_list = torch.split(labels,batch_size_dic["effective_batch_size"])
+    sub_inputs_list = torch.split(inputs,batch_size_dic["effective_batch_size"])
+
+    for i,j in enumerate(sub_labels_list):
+        sub_batch_size = sub_labels_list[i].size()[0]
+        averaging_factor_list.append(sub_batch_size/total_batch_images)
+
+    sub_batchs_dic = {"sub_inputs_list":sub_inputs_list,"sub_labels_list": sub_labels_list,
+                      "averaging_factor_list":averaging_factor_list,"total_batch_images":total_batch_images}
+    return sub_batchs_dic
 def getModel(model_name, num_classes, feature_extract, create_new= False, use_pretrained=False):
     # to make sure that we have the same parameters across multiple Torch versions. Increase repreducability
     model, input_size = initialize_model(model_name, num_classes, feature_extract, use_pretrained=False)

@@ -44,6 +44,7 @@ def runManualAugmentation(variouse_datasets_loader, augmentaionType, model, num_
         # Train and evaluate
         results = helpers.train_model_manual_augmentation(model_ft, dataloaders_dict, criterion, optimizer_ft,
                                       num_classes,
+                                      batch_size_dic=batch_size_dic,
                                       augmentation_type=augmentaionType,
                                       data_sizes_dict=data_sizes_dict,
                                       device=device,
@@ -162,8 +163,7 @@ def ManualAugmentationExperiments(batch_size, model_name):
     # ----------------------------Finish Defining our variouse dataloaders ---------------------------------
     augmentations = ["No_Augmentation Manual Augmentation", "Random Rotation [-180 +180] Resized",
                      "Random Contrast [0.5 2]", "Random Translate [0.3 0.3]"]
-    augmentations = ["Random Rotation [-180 +180] Resized",
-                     "Random Contrast [0.5 2]", "Random Translate [0.3 0.3]"]
+
     for augmentation_type in augmentations :
         variouse_datasets_loader=[]
         variouse_datasets_loader, phases = helpers.get_variouse_datasets_loaders(train_dataset_noAugmentation,
@@ -196,7 +196,7 @@ if __name__ == '__main__':
     # Number of epochs to train for
     num_epochs = 3
 
-    effective_batch_size = 10
+    effective_batch_size = 5
     target_batch_size = 10
     assert(effective_batch_size<=target_batch_size)
 
