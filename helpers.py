@@ -359,12 +359,11 @@ def train_model_manual_augmentation(model, dataloaders, criterion, optimizer,num
                 for sub_batch_index, temp_labels in enumerate(sub_batchs_labels):
                     sub_batch_inputs = sub_batchs_images[sub_batch_index]
                     sub_batch_labels = sub_batchs_labels[sub_batch_index]
-                    if phase == "train" and sub_batch<=1:
-                        Data_Related_Methods.imshow(sub_batch_inputs, num_images=5)
-                        sub_batch+=1
-                        print(sub_batch_labels)
-                    else:
-                        exit(0)
+                    # show the orig and aug images if 1:1 is applied or show the first and second batch images otherwise
+                    # if phase == "train" and sub_batch<=1:
+                    #     Data_Related_Methods.imshow(sub_batch_inputs, num_images=2)
+                    #     sub_batch+=1
+
 
                     inputs = sub_batch_inputs.to(device)#this line cuase error if I don't have enough space in my GPU
                     labels = sub_batch_labels.to(device)
