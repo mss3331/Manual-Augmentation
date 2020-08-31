@@ -39,7 +39,7 @@ def runManualAugmentation(variouse_datasets_loader, augmentaionType, model, num_
         model_ft = model_ft.to(device)
         params_to_update = helpers.which_parameter_to_optimize(model_ft, feature_extract, False)
         # Observe that all parameters are being optimized
-        optimizer_ft = optim.Adam(params_to_update, lr=0.001)#, momentum=0.9)
+        optimizer_ft = optim.SGD(params_to_update, lr=0.001, momentum=0.9)
         # Setup the loss fxn
         criterion = nn.CrossEntropyLoss()
         # Train and evaluate
@@ -198,10 +198,10 @@ if __name__ == '__main__':
     #   when True we only update the reshaped layer params
     feature_extract = False
     # Number of epochs to train for
-    num_epochs = 3
-    orig_aug_ratio_dic={"original":1,"augmentation":1}
+    num_epochs = 800
+    orig_aug_ratio_dic={"original":0,"augmentation":1}
     effective_batch_size = 50
-    target_batch_size = 50
+    target_batch_size = 52
     assert(effective_batch_size<=target_batch_size)
 
     batch_size_dic = {"effective_batch_size":effective_batch_size, "target_batch_size":target_batch_size}
