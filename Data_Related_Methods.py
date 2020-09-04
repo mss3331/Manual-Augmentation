@@ -79,12 +79,18 @@ def imshow(imgs,normalize=True,num_images=1):
     #print(img.size())
     # visualize some images
     from_tensor_to_pillo = transforms.ToPILImage()
+    inv_normalize = transforms.Normalize(
+        mean=[-0.485 / 0.229, -0.456 / 0.224, -0.406 / 0.255],
+        std=[1 / 0.229, 1 / 0.224, 1 / 0.255]
+    )
+
     for i in range(num_images):
         img = imgs[i]
         if normalize:
-            img = from_tensor_to_pillo(img*0.225 + 0.47)
-        else:
-            img = from_tensor_to_pillo(img)
+            img = inv_normalize(img)
+            img = img - torch.min(torch.min(img))
+            img = img / torch.max(torch.max(img))
+        img = from_tensor_to_pillo(img)
         img.show()
 
 def fill_co_occurence(pred,label,co_occurence):
