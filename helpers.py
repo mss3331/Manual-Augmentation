@@ -163,11 +163,11 @@ def load_dataset_general(train_dataset,train_dataset_not_augmented, valid_test_d
 
     train_loader = torch.utils.data.DataLoader(
         train_dataset_concat, batch_size=batch_size["target_batch_size"], sampler=sampler_dic['train_sampler'],
-        num_workers=num_workers, pin_memory=pin_memory, shuffle= False
+        num_workers=num_workers, pin_memory=True, shuffle= False
     )
     valid_loader = torch.utils.data.DataLoader(
         valid_test_dataset, batch_size=batch_size["effective_batch_size"], sampler=sampler_dic['valid_sampler'],
-        num_workers=num_workers, pin_memory=pin_memory,shuffle= False
+        num_workers=num_workers, pin_memory=True,shuffle= False
     )
 
     print("Concat Dataset length = "+str(len(train_loader.sampler)))
@@ -360,9 +360,9 @@ def train_model_manual_augmentation(model, dataloaders, criterion, optimizer,num
                     sub_batch_inputs = sub_batchs_images[sub_batch_index]
                     sub_batch_labels = sub_batchs_labels[sub_batch_index]
                     # show the orig and aug images if 1:1 is applied or show the first and second batch images otherwise
-                    if phase == "train" and sub_batch<=1:
-                        Data_Related_Methods.imshow(sub_batch_inputs, num_images=10)
-                        sub_batch+=1
+                    # if phase == "train" and sub_batch<=1:
+                    #     Data_Related_Methods.imshow(sub_batch_inputs, num_images=10)
+                    #     sub_batch+=1
 
 
                     inputs = sub_batch_inputs.to(device)#this line cuase error if I don't have enough space in my GPU
@@ -506,22 +506,32 @@ def augment(pilo_imgs, augmentation_type,magnitude_factors,magnitude_factors_ind
                      key, image in enumerate(pilo_imgs)]
     # Contrast
     elif augmentation_type.find("Contrast") >= 0:
-        [print("Mag Factor {} and the resulted rotation is {}".format(magnitude_factors[key + magnitude_factors_index]/2,
-                                                                      magnitude_factors[
-                                                                          key + magnitude_factors_index]/2+1 ))
-         for key, image in enumerate(pilo_imgs)]
         pilo_imgs = [TF.adjust_contrast(image, magnitude_factors[key + magnitude_factors_index]/2 + 1) for key, image in
                      enumerate(pilo_imgs)]
-    # Translate
+    # Translate. More work is needed for this section
     elif augmentation_type.find("Translate") >= 0:
-        pilo_imgs = [TF.affine(image, translate=[image_size[0] * magnitude_factors[key + magnitude_factors_index],
-                                                 image_size[1] * magnitude_factors[key + magnitude_factors_index]],
-                               angle=0, scale=1, shear=0) for key, image in enumerate(pilo_imgs)]
+        pilo_imgs_temp=[]
+        translate_ratio = [0.3, 0.3]
+        index = 0
+        # for each image in the list do
+        for key, image in enumerate(pilo_imgs):
+            image_augmented = TF.affine(image, translate=[image_size[0] * magnitude_factors[index + magnitude_factors_index]*translate_ratio[0],
+                                                 image_size[1] * magnitude_factors[index+1 + magnitude_factors_index]*translate_ratio[1]],
+                               angle=0, scale=1, shear=0)
+            pilo_imgs_temp.append(image_augmented)
+            magnitude_factors_index+=2
+
+        pilo_imgs = pilo_imgs_temp
+        next_random_index = index
+
+    # other augmentation needs to update the next random number wherease in Translate is already updated
+    if augmentation_type.find("Translate")<0:
+        # What is the index of the augmentation factor for the next upcoming batch
+        next_random_index = magnitude_factors_index + len(pilo_imgs)
+
+
+    #resize all augmented images
     pilo_imgs = [TF.resize(image, image_size) for image in pilo_imgs]
-
-
-    # What is the index of the augmentation factor for the next upcoming batch
-    next_random_index = magnitude_factors_index + len(pilo_imgs)
 
     return pilo_imgs, next_random_index
 
