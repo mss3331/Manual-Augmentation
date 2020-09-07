@@ -338,7 +338,7 @@ def train_model_manual_augmentation(model, dataloaders, criterion, optimizer,num
             all_predections = []
             all_labels = []
             sub_batch = 0
-            magnitude_factors = list(pandas.read_csv('./random_numbers.csv', index_col=0,dtype='float').to_numpy().squeeze())
+            magnitude_factors = list(pandas.read_csv('./random_numbers.csv', index_col=0,dtype='float').to_numpy().squeeze()*2-1)
 
             # Iterate over data.
             for inputs, labels in dataloaders[phase]:
@@ -360,9 +360,9 @@ def train_model_manual_augmentation(model, dataloaders, criterion, optimizer,num
                     sub_batch_inputs = sub_batchs_images[sub_batch_index]
                     sub_batch_labels = sub_batchs_labels[sub_batch_index]
                     # show the orig and aug images if 1:1 is applied or show the first and second batch images otherwise
-                    # if phase == "train" and sub_batch<=1:
-                    #     Data_Related_Methods.imshow(sub_batch_inputs, num_images=2)
-                    #     sub_batch+=1
+                    if phase == "train" and sub_batch<=1:
+                        Data_Related_Methods.imshow(sub_batch_inputs, num_images=10)
+                        sub_batch+=1
 
 
                     inputs = sub_batch_inputs.to(device)#this line cuase error if I don't have enough space in my GPU
@@ -502,11 +502,15 @@ def augment(pilo_imgs, augmentation_type,magnitude_factors,magnitude_factors_ind
 
     # Rotate Images
     if augmentation_type.find("Rotation") >= 0:
-        pilo_imgs = [TF.rotate(image, magnitude_factors[key + magnitude_factors_index] * 360, expand=True) for
+        pilo_imgs = [TF.rotate(image, magnitude_factors[key + magnitude_factors_index] * 180, expand=True) for
                      key, image in enumerate(pilo_imgs)]
     # Contrast
     elif augmentation_type.find("Contrast") >= 0:
-        pilo_imgs = [TF.adjust_contrast(image, magnitude_factors[key + magnitude_factors_index] + 0.5) for key, image in
+        [print("Mag Factor {} and the resulted rotation is {}".format(magnitude_factors[key + magnitude_factors_index]/2,
+                                                                      magnitude_factors[
+                                                                          key + magnitude_factors_index]/2+1 ))
+         for key, image in enumerate(pilo_imgs)]
+        pilo_imgs = [TF.adjust_contrast(image, magnitude_factors[key + magnitude_factors_index]/2 + 1) for key, image in
                      enumerate(pilo_imgs)]
     # Translate
     elif augmentation_type.find("Translate") >= 0:
