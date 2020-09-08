@@ -536,7 +536,6 @@ def augment(pilo_imgs, augmentation_type,magnitude_factors,magnitude_factors_ind
     return pilo_imgs, next_random_index
 
 def augmentBatch(tensor_images, labels, augmentation_type, magnitude_factors, magnitude_factors_index,orig_aug_ratio_dic):
-
     pilo_imgs_orig = [TF.to_pil_image(image) for image in tensor_images] #convert tensor img to pillo
     pilo_imgs_aug = []
     orig_labels = copy.deepcopy(labels)
@@ -566,8 +565,11 @@ def splitIntoSubBatchs(inputs,labels,batch_size_dic):
     averaging_factor_list=[]
     total_batch_images = labels.size()[0]
 
-    sub_labels_list = torch.split(labels,batch_size_dic["effective_batch_size"])
-    sub_inputs_list = torch.split(inputs,batch_size_dic["effective_batch_size"])
+    # sub_labels_list = torch.split(labels,batch_size_dic["effective_batch_size"])
+    # sub_inputs_list = torch.split(inputs,batch_size_dic["effective_batch_size"])
+    # No matter what, it will not split the batch into sub-batches
+    sub_labels_list = torch.split(labels,total_batch_images)
+    sub_inputs_list = torch.split(inputs,total_batch_images)
 
     for i,j in enumerate(sub_labels_list):
         sub_batch_size = sub_labels_list[i].size()[0]
@@ -575,6 +577,7 @@ def splitIntoSubBatchs(inputs,labels,batch_size_dic):
 
     sub_batchs_dic = {"sub_inputs_list":sub_inputs_list,"sub_labels_list": sub_labels_list,
                       "averaging_factor_list":averaging_factor_list,"total_batch_images":total_batch_images}
+
     return sub_batchs_dic
 def getModel(model_name, num_classes, feature_extract, create_new= False, use_pretrained=False):
     # to make sure that we have the same parameters across multiple Torch versions. Increase repreducability

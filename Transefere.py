@@ -199,10 +199,10 @@ if __name__ == '__main__':
     feature_extract = False
     # Number of epochs to train for
     num_epochs = 2
-    orig_aug_ratio_dic={"original":0,"augmentation":1}
-    effective_batch_size = 10
-    target_batch_size = 10
-    assert(effective_batch_size<=target_batch_size)
+    orig_aug_ratio_dic={"original":1,"augmentation":1}
+    effective_batch_size = 25
+    target_batch_size = 25
+    #assert(effective_batch_size<=target_batch_size)
 
     batch_size_dic = {"effective_batch_size":effective_batch_size, "target_batch_size":target_batch_size}
     concatenate_dataset = False
