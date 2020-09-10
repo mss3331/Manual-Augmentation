@@ -312,6 +312,8 @@ def train_model_manual_augmentation(model, dataloaders, criterion, optimizer,num
     magnitude_factors_index = 0 #this index if putted inside the for loop, the experiment would be offline rather than online
     result_panda_dic = {}#this dictionary will save the important results and it will be saved using panda.
     skip_testSets_flag = True # this flag will make the model either skip or classify the testing set (we only need to know the accuracy of the testing sets if validation reached the highest accuracy)
+    magnitude_factors_dic={"augmentation factors":list(pandas.read_csv('./random_numbers.csv', index_col=0, dtype='float').to_numpy().squeeze() * 2 - 1),
+                           "random probability":list(pandas.read_csv('./random_numbers.csv', index_col=0, dtype='float').to_numpy().squeeze())}
     for epoch in range(num_epochs):
         print('Epoch {}/{}'.format(epoch, num_epochs - 1))
         print('-' * 10)
@@ -338,14 +340,14 @@ def train_model_manual_augmentation(model, dataloaders, criterion, optimizer,num
             all_predections = []
             all_labels = []
             sub_batch = 0
-            magnitude_factors = list(pandas.read_csv('./random_numbers.csv', index_col=0,dtype='float').to_numpy().squeeze()*2-1)
+
 
             # Iterate over data.
             for inputs, labels in dataloaders[phase]:
 
                 if phase == "train":
                     inputs, labels, magnitude_factors_index = augmentBatch(inputs, labels, augmentation_type,
-                                                              magnitude_factors,magnitude_factors_index,orig_aug_ratio_dic)
+                                                              magnitude_factors_dic,magnitude_factors_index,orig_aug_ratio_dic)
 
 
 
@@ -488,7 +490,7 @@ def train_model_manual_augmentation(model, dataloaders, criterion, optimizer,num
               'best_optimizer_wts':best_optimizer_wts}
 
     return result,panda_training_validation_testing_results
-def augment(pilo_imgs, augmentation_type,magnitude_factors,magnitude_factors_index):
+def augment(pilo_imgs, augmentation_type,magnitude_factors_dic,magnitude_factors_index):
     '''Augment the current batch and update aumgentation factors index and return the augmente batch
     input:
         -pilo_images
@@ -499,48 +501,36 @@ def augment(pilo_imgs, augmentation_type,magnitude_factors,magnitude_factors_ind
         -next_random_index updated index for the upcoming mag factor
         -list of augmented tensor images'''
     image_size = pilo_imgs[0].size
-
+    magnitude_factors = magnitude_factors_dic["augmentation factors"]
+#********************** AUGMENTATION METHODS ********************************
     # Rotate Images
     if augmentation_type.find("Rotation") >= 0:
-        pilo_imgs = [TF.rotate(image, magnitude_factors[key + magnitude_factors_index] * 180, expand=True) for
-                     key, image in enumerate(pilo_imgs)]
+        pilo_imgs = rotate(magnitude_factors,magnitude_factors_index,pilo_imgs)
+
     # Contrast
     elif augmentation_type.find("Contrast") >= 0:
-        pilo_imgs = [TF.adjust_contrast(image, magnitude_factors[key + magnitude_factors_index]/2 + 1) for key, image in
-                     enumerate(pilo_imgs)]
+        pilo_imgs = contrast(magnitude_factors,magnitude_factors_index,pilo_imgs)
     # Translate. More work is needed for this section
     elif augmentation_type.find("Translate") >= 0:
-        pilo_imgs_temp=[]
-        translate_ratio = [0.3, 0.3]
-        index = 0
-        # for each image in the list do
-        for key, image in enumerate(pilo_imgs):
-            image_augmented = TF.affine(image, translate=[image_size[0] * magnitude_factors[index + magnitude_factors_index]*translate_ratio[0],
-                                                 image_size[1] * magnitude_factors[index+1 + magnitude_factors_index]*translate_ratio[1]],
-                               angle=0, scale=1, shear=0)
-            pilo_imgs_temp.append(image_augmented)
-            magnitude_factors_index+=2
-
-        pilo_imgs = pilo_imgs_temp
+        pilo_imgs, index = translate(magnitude_factors,magnitude_factors_index,pilo_imgs)
         next_random_index = index
 
     # other augmentation needs to update the next random number wherease in Translate is already updated
     if augmentation_type.find("Translate")<0:
-        # What is the index of the augmentation factor for the next upcoming batch
-        next_random_index = magnitude_factors_index + len(pilo_imgs)
+        next_random_index = magnitude_factors_index + len(pilo_imgs) # What is the index of the augmentation factor for the next upcoming batch
+#********************** END OF AUGMENTATION METHODS ***************************
 
 
     #resize all augmented images
     pilo_imgs = [TF.resize(image, image_size) for image in pilo_imgs]
-
     return pilo_imgs, next_random_index
 
-def augmentBatch(tensor_images, labels, augmentation_type, magnitude_factors, magnitude_factors_index,orig_aug_ratio_dic):
+def augmentBatch(tensor_images, labels, augmentation_type, magnitude_factors_dic, magnitude_factors_index,orig_aug_ratio_dic):
     pilo_imgs_orig = [TF.to_pil_image(image) for image in tensor_images] #convert tensor img to pillo
     pilo_imgs_aug = []
     orig_labels = copy.deepcopy(labels)
     for i in range(orig_aug_ratio_dic["augmentation"]):
-        pilo_images_temp, magnitude_factors_index = augment(pilo_imgs_orig, augmentation_type,magnitude_factors,magnitude_factors_index)
+        pilo_images_temp, magnitude_factors_index = augment(pilo_imgs_orig, augmentation_type,magnitude_factors_dic,magnitude_factors_index)
         pilo_imgs_aug+=pilo_images_temp
         if(i>0):
             labels=torch.cat((orig_labels,labels))
@@ -592,3 +582,25 @@ def getModel(model_name, num_classes, feature_extract, create_new= False, use_pr
         model.load_state_dict(checkpoint["model"])
         return model, input_size
 
+def rotate(magnitude_factors,magnitude_factors_index,pilo_imgs):
+    pilo_imgs = [TF.rotate(image, magnitude_factors[key + magnitude_factors_index] * 180, expand=True) for
+                 key, image in enumerate(pilo_imgs)]
+    return pilo_imgs
+def contrast(magnitude_factors,magnitude_factors_index,pilo_imgs):
+    pilo_imgs = [TF.adjust_contrast(image, magnitude_factors[key + magnitude_factors_index] / 2 + 1) for key, image in
+                 enumerate(pilo_imgs)]
+    return pilo_imgs
+def translate(magnitude_factors,magnitude_factors_index,pilo_imgs):
+    pilo_imgs_temp = []
+    translate_ratio = [0.3, 0.3]
+    index = 0
+    height, width = pilo_imgs[0].size
+    # for each image in the list do
+    for key, image in enumerate(pilo_imgs):
+        image_augmented = TF.affine(image, translate=[
+            height * magnitude_factors[index + magnitude_factors_index] * translate_ratio[0],
+            width * magnitude_factors[index + 1 + magnitude_factors_index] * translate_ratio[1]],
+                                    angle=0, scale=1, shear=0)
+        pilo_imgs_temp.append(image_augmented)
+        magnitude_factors_index += 2
+    return pilo_imgs_temp, index
