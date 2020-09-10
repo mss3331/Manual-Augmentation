@@ -313,7 +313,7 @@ def train_model_manual_augmentation(model, dataloaders, criterion, optimizer,num
     result_panda_dic = {}#this dictionary will save the important results and it will be saved using panda.
     skip_testSets_flag = True # this flag will make the model either skip or classify the testing set (we only need to know the accuracy of the testing sets if validation reached the highest accuracy)
     magnitude_factors_dic={"augmentation factors":list(pandas.read_csv('./random_numbers.csv', index_col=0, dtype='float').to_numpy().squeeze() * 2 - 1),
-                           "random probability":list(pandas.read_csv('./random_numbers.csv', index_col=0, dtype='float').to_numpy().squeeze())}
+                           "random probability":list(pandas.read_csv('./random_numbers2.csv', index_col=0, dtype='float').to_numpy().squeeze())}
     for epoch in range(num_epochs):
         print('Epoch {}/{}'.format(epoch, num_epochs - 1))
         print('-' * 10)
@@ -362,9 +362,9 @@ def train_model_manual_augmentation(model, dataloaders, criterion, optimizer,num
                     sub_batch_inputs = sub_batchs_images[sub_batch_index]
                     sub_batch_labels = sub_batchs_labels[sub_batch_index]
                     # show the orig and aug images if 1:1 is applied or show the first and second batch images otherwise
-                    # if phase == "train" and sub_batch<=1:
-                    #     Data_Related_Methods.imshow(sub_batch_inputs, num_images=10)
-                    #     sub_batch+=1
+                    if phase == "train" and sub_batch<=0:
+                        Data_Related_Methods.imshow(sub_batch_inputs, num_images=6)
+                        sub_batch+=1
 
 
                     inputs = sub_batch_inputs.to(device)#this line cuase error if I don't have enough space in my GPU
@@ -502,24 +502,27 @@ def augment(pilo_imgs, augmentation_type,magnitude_factors_dic,magnitude_factors
         -list of augmented tensor images'''
     image_size = pilo_imgs[0].size
     magnitude_factors = magnitude_factors_dic["augmentation factors"]
+
 #********************** AUGMENTATION METHODS ********************************
     # Rotate Images
     if augmentation_type.find("Rotation") >= 0:
         pilo_imgs = rotate(magnitude_factors,magnitude_factors_index,pilo_imgs)
+        next_random_index = magnitude_factors_index + len(pilo_imgs)  # What is the index of the augmentation factor for the next upcoming batch
 
     # Contrast
     elif augmentation_type.find("Contrast") >= 0:
-        pilo_imgs = contrast(magnitude_factors,magnitude_factors_index,pilo_imgs)
+        pilo_imgs= contrast(magnitude_factors,magnitude_factors_index,pilo_imgs)
+        next_random_index = magnitude_factors_index + len(pilo_imgs)  # What is the index of the augmentation factor for the next upcoming batch
     # Translate. More work is needed for this section
     elif augmentation_type.find("Translate") >= 0:
-        pilo_imgs, index = translate(magnitude_factors,magnitude_factors_index,pilo_imgs)
-        next_random_index = index
+        pilo_imgs, new_index = translate(magnitude_factors,magnitude_factors_index,pilo_imgs)
+        next_random_index = new_index
 
-    # other augmentation needs to update the next random number wherease in Translate is already updated
-    if augmentation_type.find("Translate")<0:
-        next_random_index = magnitude_factors_index + len(pilo_imgs) # What is the index of the augmentation factor for the next upcoming batch
+    elif augmentation_type.find("Mix") >=0:
+        pilo_imgs, new_index = mix(magnitude_factors_dic, magnitude_factors_index, pilo_imgs)
+        next_random_index = new_index
+
 #********************** END OF AUGMENTATION METHODS ***************************
-
 
     #resize all augmented images
     pilo_imgs = [TF.resize(image, image_size) for image in pilo_imgs]
@@ -593,14 +596,43 @@ def contrast(magnitude_factors,magnitude_factors_index,pilo_imgs):
 def translate(magnitude_factors,magnitude_factors_index,pilo_imgs):
     pilo_imgs_temp = []
     translate_ratio = [0.3, 0.3]
-    index = 0
     height, width = pilo_imgs[0].size
     # for each image in the list do
     for key, image in enumerate(pilo_imgs):
         image_augmented = TF.affine(image, translate=[
-            height * magnitude_factors[index + magnitude_factors_index] * translate_ratio[0],
-            width * magnitude_factors[index + 1 + magnitude_factors_index] * translate_ratio[1]],
+            height * magnitude_factors[magnitude_factors_index] * translate_ratio[0],
+            width * magnitude_factors[magnitude_factors_index+1] * translate_ratio[1]],
                                     angle=0, scale=1, shear=0)
         pilo_imgs_temp.append(image_augmented)
         magnitude_factors_index += 2
-    return pilo_imgs_temp, index
+    return pilo_imgs_temp, magnitude_factors_index
+
+def mix(magnitude_factors_dic, magnitude_factors_index, pilo_imgs):
+    magnitude_factors = magnitude_factors_dic["augmentation factors"]
+    random_probability = magnitude_factors_dic["random probability"]
+    pilo_imgs_temp = []
+    translate_ratio = [0.3, 0.3]
+    height, width = pilo_imgs[0].size
+
+    # for each image in the list do
+    for key, image in enumerate(pilo_imgs):
+        which_augmentation = (random_probability[magnitude_factors_index] * 4) // 1 #// 1 for cielling only
+        if which_augmentation == 0 : # No augmentation
+            image_augmented = image
+        elif which_augmentation == 1 : # Rotation
+            image_augmented = TF.rotate(image, magnitude_factors[magnitude_factors_index] * 180, expand=True)
+        elif which_augmentation == 2:  # Contrast
+            image_augmented = TF.adjust_contrast(image, magnitude_factors[magnitude_factors_index] / 2 + 1)
+        elif which_augmentation >= 3 : # Translate
+            image_augmented = TF.affine(image, translate=[
+            height * magnitude_factors[magnitude_factors_index] * translate_ratio[0],
+            width * magnitude_factors[magnitude_factors_index+1] * translate_ratio[1]],
+                                    angle=0, scale=1, shear=0)
+            magnitude_factors_index += 1 #we used two augmentatino slots so we need to update the index
+
+        pilo_imgs_temp.append(image_augmented)
+        magnitude_factors_index += 1
+    return pilo_imgs_temp, magnitude_factors_index
+
+
+    return pilo_imgs
