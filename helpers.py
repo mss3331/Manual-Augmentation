@@ -502,7 +502,7 @@ def augment(pilo_imgs, augmentation_type,magnitude_factors_dic,magnitude_factors
         -list of augmented tensor images'''
     image_size = pilo_imgs[0].size
     magnitude_factors = magnitude_factors_dic["augmentation factors"]
-
+    next_random_index = 0
 #********************** AUGMENTATION METHODS ********************************
     # Rotate Images
     if augmentation_type.find("Rotation") >= 0:
