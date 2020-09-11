@@ -312,8 +312,8 @@ def train_model_manual_augmentation(model, dataloaders, criterion, optimizer,num
     magnitude_factors_index = 0 #this index if putted inside the for loop, the experiment would be offline rather than online
     result_panda_dic = {}#this dictionary will save the important results and it will be saved using panda.
     skip_testSets_flag = True # this flag will make the model either skip or classify the testing set (we only need to know the accuracy of the testing sets if validation reached the highest accuracy)
-    magnitude_factors_dic={"augmentation factors":list(pandas.read_csv('./random_numbers1_double.csv.csv', index_col=0, dtype='float').to_numpy().squeeze() * 2 - 1),
-                           "random probability":list(pandas.read_csv('./random_numbers2_double.csv.csv', index_col=0, dtype='float').to_numpy().squeeze())}
+    magnitude_factors_dic={"augmentation factors":list(pandas.read_csv('./random_numbers1_double.csv', index_col=0, dtype='float').to_numpy().squeeze() * 2 - 1),
+                           "random probability":list(pandas.read_csv('./random_numbers2_double.csv', index_col=0, dtype='float').to_numpy().squeeze())}
     for epoch in range(num_epochs):
         print('Epoch {}/{}'.format(epoch, num_epochs - 1))
         print('-' * 10)
