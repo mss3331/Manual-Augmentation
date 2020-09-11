@@ -165,7 +165,7 @@ def ManualAugmentationExperiments(batch_size, model_name,orig_aug_ratio_dic):
     # ----------------------------Finish Defining our variouse dataloaders ---------------------------------
     augmentations = ["No_Augmentation Manual Augmentation", "Random Rotation [-180 +180] Resized",
                      "Random Contrast [0.5 2]", "Random Translate [0.3 0.3]"]
-    augmentations = ["Random Translate [0.3 0.3]"]
+    augmentations = ["Random Translate [0.3 0.3]", "Mix"]
 
     for augmentation_type in augmentations :
         variouse_datasets_loader=[]
