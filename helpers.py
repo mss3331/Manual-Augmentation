@@ -116,6 +116,7 @@ def initialize_model(model_name, num_classes, feature_extract, use_pretrained=Tr
         # Handle the primary net
         num_ftrs = model_ft.fc.in_features
         model_ft.fc = nn.Linear(num_ftrs,num_classes)
+        model_ft.dropout = nn.Dropout(p=0)
         input_size = 299
 
     else:
@@ -309,7 +310,7 @@ def train_model_manual_augmentation(model, dataloaders, criterion, optimizer,num
     co_occurence_test = np.zeros((num_classes,num_classes))
     val_prec_rec_fs_support = (0,0,0,None)
     test_prec_rec_fs_support = (0,0,0,None)
-    magnitude_factors_index = 0 #this index if putted inside the for loop, the experiment would be offline rather than online
+    magnitude_factors_index = 0  # this index if putted inside the for loop, the experiment would be offline rather than online
     result_panda_dic = {}#this dictionary will save the important results and it will be saved using panda.
     skip_testSets_flag = True # this flag will make the model either skip or classify the testing set (we only need to know the accuracy of the testing sets if validation reached the highest accuracy)
     magnitude_factors_dic={"augmentation factors":list(pandas.read_csv('./random_numbers1_double.csv', index_col=0, dtype='float').to_numpy().squeeze() * 2 - 1),
@@ -363,7 +364,7 @@ def train_model_manual_augmentation(model, dataloaders, criterion, optimizer,num
                     sub_batch_labels = sub_batchs_labels[sub_batch_index]
                     # show the orig and aug images if 1:1 is applied or show the first and second batch images otherwise
                     # if phase == "train" and sub_batch<=0:
-                    #     Data_Related_Methods.imshow(sub_batch_inputs, num_images=6)
+                    #     Data_Related_Methods.imshow(sub_batch_inputs, num_images=3)
                     #     sub_batch+=1
 
 
@@ -586,16 +587,16 @@ def getModel(model_name, num_classes, feature_extract, create_new= False, use_pr
         return model, input_size
 
 def rotate(magnitude_factors,magnitude_factors_index,pilo_imgs):
-    pilo_imgs = [TF.rotate(image, magnitude_factors[key + magnitude_factors_index] * 180, expand=True) for
+    pilo_imgs = [TF.rotate(image, magnitude_factors[key + magnitude_factors_index] * 90, expand=True) for
                  key, image in enumerate(pilo_imgs)]
     return pilo_imgs
 def contrast(magnitude_factors,magnitude_factors_index,pilo_imgs):
-    pilo_imgs = [TF.adjust_contrast(image, magnitude_factors[key + magnitude_factors_index] / 2 + 1) for key, image in
+    pilo_imgs = [TF.adjust_contrast(image, magnitude_factors[key + magnitude_factors_index] / 4 + 1) for key, image in
                  enumerate(pilo_imgs)]
     return pilo_imgs
 def translate(magnitude_factors,magnitude_factors_index,pilo_imgs):
     pilo_imgs_temp = []
-    translate_ratio = [0.3, 0.3]
+    translate_ratio = [0.15, 0.15]
     height, width = pilo_imgs[0].size
     # for each image in the list do
     for key, image in enumerate(pilo_imgs):
@@ -611,7 +612,7 @@ def mix(magnitude_factors_dic, magnitude_factors_index, pilo_imgs):
     magnitude_factors = magnitude_factors_dic["augmentation factors"]
     random_probability = magnitude_factors_dic["random probability"]
     pilo_imgs_temp = []
-    translate_ratio = [0.3, 0.3]
+    translate_ratio = [0.15, 0.15]
     height, width = pilo_imgs[0].size
 
     # for each image in the list do
@@ -620,9 +621,9 @@ def mix(magnitude_factors_dic, magnitude_factors_index, pilo_imgs):
         if which_augmentation == 0 : # No augmentation
             image_augmented = image
         elif which_augmentation == 1 : # Rotation
-            image_augmented = TF.rotate(image, magnitude_factors[magnitude_factors_index] * 180, expand=True)
+            image_augmented = TF.rotate(image, magnitude_factors[magnitude_factors_index] * 90, expand=True)
         elif which_augmentation == 2:  # Contrast
-            image_augmented = TF.adjust_contrast(image, magnitude_factors[magnitude_factors_index] / 2 + 1)
+            image_augmented = TF.adjust_contrast(image, magnitude_factors[magnitude_factors_index] / 4 + 1)
         elif which_augmentation >= 3 : # Translate
             image_augmented = TF.affine(image, translate=[
             height * magnitude_factors[magnitude_factors_index] * translate_ratio[0],

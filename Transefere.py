@@ -164,8 +164,10 @@ def ManualAugmentationExperiments(batch_size, model_name,orig_aug_ratio_dic):
 
     # ----------------------------Finish Defining our variouse dataloaders ---------------------------------
     augmentations = ["No_Augmentation Manual Augmentation", "Random Rotation [-180 +180] Resized",
-                     "Random Contrast [0.5 2]", "Random Translate [0.3 0.3]"]
-    augmentations = ["Random Translate [0.3 0.3]", "Mix"]
+                     "Random Contrast [0.5 1.5]", "Random Translate [0.3 0.3]", "Mix"]
+    # No augmentation is not used since it would have the same results as augmentations above
+    augmentations = ["Random Rotation [-90 +90] Resized",
+                     "Random Contrast [0.75 1.25]", "Random Translate [0.15 0.15]", "Mix"]
 
     for augmentation_type in augmentations :
         variouse_datasets_loader=[]
@@ -185,7 +187,7 @@ if __name__ == '__main__':
     torch.backends.cudnn.benchmark = False
     random.seed(0)
     # Models to choose from [resnet, alexnet, vgg, squeezenet, densenet, inception]
-    model_name = "inception"
+    model_name = "densenet"
     #which indecies to consider
     read_from_file = "./dataset1_dataset2_KvasirV1.csv"
     # train set percintage
@@ -198,8 +200,8 @@ if __name__ == '__main__':
     #   when True we only update the reshaped layer params
     feature_extract = False
     # Number of epochs to train for
-    num_epochs = 2
-    orig_aug_ratio_dic={"original":1,"augmentation":1}
+    num_epochs = 800
+    orig_aug_ratio_dic={"original":0,"augmentation":1}
     effective_batch_size = 25
     target_batch_size = 25
     #assert(effective_batch_size<=target_batch_size)
