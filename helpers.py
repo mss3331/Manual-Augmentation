@@ -13,6 +13,7 @@ from torch.utils.data.sampler import SubsetRandomSampler
 from torch.utils.data import ConcatDataset
 import torchvision.transforms.functional as TF
 from torch.utils.data.sampler import SequentialSampler
+import MyInception
 
 
 class SubsetSampler(torch.utils.data.SubsetRandomSampler):
@@ -108,7 +109,7 @@ def initialize_model(model_name, num_classes, feature_extract, use_pretrained=Tr
         """ Inception v3
         Be careful, expects (299,299) sized images and has auxiliary output
         """
-        model_ft = models.inception_v3(pretrained=use_pretrained)
+        model_ft = MyInception.inception_v3(pretrained=use_pretrained)#models.inception_v3(pretrained=use_pretrained)
         set_parameter_requires_grad(model_ft, feature_extract)
         # Handle the auxilary net
         num_ftrs = model_ft.AuxLogits.fc.in_features
@@ -116,7 +117,8 @@ def initialize_model(model_name, num_classes, feature_extract, use_pretrained=Tr
         # Handle the primary net
         num_ftrs = model_ft.fc.in_features
         model_ft.fc = nn.Linear(num_ftrs,num_classes)
-        model_ft.dropout = nn.Dropout(p=0)
+        #print(model_ft.dropout, "Dropout is 0")
+        #model_ft.dropout = nn.Dropout(p=0)
         input_size = 299
 
     else:
@@ -587,16 +589,16 @@ def getModel(model_name, num_classes, feature_extract, create_new= False, use_pr
         return model, input_size
 
 def rotate(magnitude_factors,magnitude_factors_index,pilo_imgs):
-    pilo_imgs = [TF.rotate(image, magnitude_factors[key + magnitude_factors_index] * 90, expand=True) for
+    pilo_imgs = [TF.rotate(image, magnitude_factors[key + magnitude_factors_index] * 180, expand=True) for
                  key, image in enumerate(pilo_imgs)]
     return pilo_imgs
 def contrast(magnitude_factors,magnitude_factors_index,pilo_imgs):
-    pilo_imgs = [TF.adjust_contrast(image, magnitude_factors[key + magnitude_factors_index] / 4 + 1) for key, image in
+    pilo_imgs = [TF.adjust_contrast(image, magnitude_factors[key + magnitude_factors_index] / 2 + 1) for key, image in
                  enumerate(pilo_imgs)]
     return pilo_imgs
 def translate(magnitude_factors,magnitude_factors_index,pilo_imgs):
     pilo_imgs_temp = []
-    translate_ratio = [0.15, 0.15]
+    translate_ratio = [0.3, 0.3]
     height, width = pilo_imgs[0].size
     # for each image in the list do
     for key, image in enumerate(pilo_imgs):
@@ -612,7 +614,7 @@ def mix(magnitude_factors_dic, magnitude_factors_index, pilo_imgs):
     magnitude_factors = magnitude_factors_dic["augmentation factors"]
     random_probability = magnitude_factors_dic["random probability"]
     pilo_imgs_temp = []
-    translate_ratio = [0.15, 0.15]
+    translate_ratio = [0.3, 0.3]
     height, width = pilo_imgs[0].size
 
     # for each image in the list do
@@ -621,9 +623,9 @@ def mix(magnitude_factors_dic, magnitude_factors_index, pilo_imgs):
         if which_augmentation == 0 : # No augmentation
             image_augmented = image
         elif which_augmentation == 1 : # Rotation
-            image_augmented = TF.rotate(image, magnitude_factors[magnitude_factors_index] * 90, expand=True)
+            image_augmented = TF.rotate(image, magnitude_factors[magnitude_factors_index] * 180, expand=True)
         elif which_augmentation == 2:  # Contrast
-            image_augmented = TF.adjust_contrast(image, magnitude_factors[magnitude_factors_index] / 4 + 1)
+            image_augmented = TF.adjust_contrast(image, magnitude_factors[magnitude_factors_index] / 2 + 1)
         elif which_augmentation >= 3 : # Translate
             image_augmented = TF.affine(image, translate=[
             height * magnitude_factors[magnitude_factors_index] * translate_ratio[0],
