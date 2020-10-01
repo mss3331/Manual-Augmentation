@@ -366,7 +366,7 @@ def train_model_manual_augmentation(model, dataloaders, criterion, optimizer,num
                     sub_batch_labels = sub_batchs_labels[sub_batch_index]
                     # show the orig and aug images if 1:1 is applied or show the first and second batch images otherwise
                     # if phase == "train" and sub_batch<=0:
-                    #     Data_Related_Methods.imshow(sub_batch_inputs, num_images=3)
+                    #     Data_Related_Methods.imshow(sub_batch_inputs, num_images=10)
                     #     sub_batch+=1
 
 
@@ -532,8 +532,8 @@ def augment(pilo_imgs, augmentation_type,magnitude_factors_dic,magnitude_factors
 
     # Random erasing Images cropped
     elif augmentation_type.find("Erasing") >= 0:
-        pilo_imgs = erasing(magnitude_factors, magnitude_factors_index, pilo_imgs)
-        next_random_index = magnitude_factors_index + len(pilo_imgs)  # What is the index of the augmentation factor for the next upcoming batch
+        pilo_imgs, new_index = erasing(magnitude_factors_dic, magnitude_factors_index, pilo_imgs)
+        next_random_index = new_index
 
 #********************** END OF AUGMENTATION METHODS ***************************
 
@@ -657,30 +657,25 @@ def rotate_cropped(magnitude_factors,magnitude_factors_index,pilo_imgs):
                  key, image in enumerate(pilo_imgs)]
     return pilo_imgs
 
-def erasing(magnitude_factors,magnitude_factors_index,pilo_imgs):
+def erasing(magnitude_factors_dic,magnitude_factors_index,pilo_imgs):
+    magnitude_factors = magnitude_factors_dic["augmentation factors"]
+    random_probability = magnitude_factors_dic["random probability"]
     pilo_imgs_temp = []
-    box_h_w = [0.3, 0.3]
+
     height, width = pilo_imgs[0].size
     # for each image in the list do
-    # for key, image in enumerate(pilo_imgs):
-    #     y,x = [(magnitude_factors[magnitude_factors_index] +1)/2, (magnitude_factors[magnitude_factors_index+1]+1)/2] # +1 and /2 to shift the augmentatino range to be 0 to 2 and 0 1 respecti
-    #     image_augmented = pilo_imgs.copy()
-    #     image_augmented[:, y:int(y*255)]
-    #     image_augmented = TF.erase(image, translate=[
-    #         height * magnitude_factors[magnitude_factors_index] * translate_ratio[0],
-    #         width * magnitude_factors[magnitude_factors_index + 1] * translate_ratio[1]],
-    #                                 angle=0, scale=1, shear=0)
-    #     pilo_imgs_temp.append(image_augmented)
-    #     magnitude_factors_index += 2
-
-    # for each image in the list do
     for key, image in enumerate(pilo_imgs):
-        y = ((magnitude_factors[magnitude_factors_index]/2+0.5) * height) // 1
-        x = ((magnitude_factors[magnitude_factors_index+1]/2+0.5) * width) // 1
+        box_h_w = [0.4 * (random_probability[magnitude_factors_index]+0.25), 0.4*(random_probability[magnitude_factors_index+1]+0.25)] # this calculation to make th box range from 0.1 to 0.5
+        y = int((magnitude_factors[magnitude_factors_index]/2+0.5) * height)
+        x = int((magnitude_factors[magnitude_factors_index+1]/2+0.5) * width)
         image_augmented = image.copy()
-        for i in range(box_h_w[0] * height): #
-            for j in range(box_h_w[1] * width):
-                image_augmented[y+i, x:x+box_h_w[1] * width] = (0,0,0)
+        for i in range(int(box_h_w[0] * height)): #
+            for j in range(int(box_h_w[1] * width)):
+                if y+i>=height or x+j>=width: #if the box beyond the image range continue
+                    continue
+
+                image_augmented.putpixel((y+i, x+j), (np.random.randint(0,256),np.random.randint(0,256),np.random.randint(0,256)))
+
         pilo_imgs_temp.append(image_augmented)
         magnitude_factors_index += 2
     return pilo_imgs_temp, magnitude_factors_index

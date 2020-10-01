@@ -167,7 +167,8 @@ def ManualAugmentationExperiments(batch_size, model_name,orig_aug_ratio_dic):
                      "Random Contrast [0.5 1.5]", "Random Translate [0.3 0.3]", "Mix"]
     # No augmentation is not used since it would have the same results as augmentations above
     #augmentations = ["Random Rotation [-90 +90] Resized","Random Contrast [0.75 1.25]", "Random Translate [0.15 0.15]", "Mix"]
-    augmentations = ["Erasing [0.3 0.3]"]
+    augmentations = ["Erasing [0.1 0.5]"]
+    #augmentations = ["Random Translate [0.3 0.3]"]
 
     for augmentation_type in augmentations :
         variouse_datasets_loader=[]
@@ -187,7 +188,7 @@ if __name__ == '__main__':
     torch.backends.cudnn.benchmark = False
     random.seed(0)
     # Models to choose from [resnet, alexnet, vgg, squeezenet, densenet, inception]
-    model_name = "inception"
+    model_name = "densenet"
     #which indecies to consider
     read_from_file = "./dataset1_dataset2_KvasirV1.csv"
     # train set percintage
