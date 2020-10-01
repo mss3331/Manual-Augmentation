@@ -6,11 +6,13 @@ import sklearn.metrics as sk
 import pandas
 import random
 import Data_Related_Methods
+import PIL
 import math
 from torch import nn
 from torchvision import models, transforms, datasets
 from torch.utils.data.sampler import SubsetRandomSampler
 from torch.utils.data import ConcatDataset
+from io import BytesIO
 import torchvision.transforms.functional as TF
 from torch.utils.data.sampler import SequentialSampler
 import MyInception
@@ -366,7 +368,7 @@ def train_model_manual_augmentation(model, dataloaders, criterion, optimizer,num
                     sub_batch_labels = sub_batchs_labels[sub_batch_index]
                     # show the orig and aug images if 1:1 is applied or show the first and second batch images otherwise
                     # if phase == "train" and sub_batch<=0:
-                    #     Data_Related_Methods.imshow(sub_batch_inputs, num_images=10)
+                    #     Data_Related_Methods.imshow(sub_batch_inputs, num_images=4)
                     #     sub_batch+=1
 
 
@@ -534,6 +536,10 @@ def augment(pilo_imgs, augmentation_type,magnitude_factors_dic,magnitude_factors
     elif augmentation_type.find("Erasing") >= 0:
         pilo_imgs, new_index = erasing(magnitude_factors_dic, magnitude_factors_index, pilo_imgs)
         next_random_index = new_index
+    # Random JPG compression
+    elif augmentation_type.find("JPG") >= 0:
+        pilo_imgs, new_index = jpg_compression(magnitude_factors, magnitude_factors_index, pilo_imgs)
+        next_random_index = new_index
 
 #********************** END OF AUGMENTATION METHODS ***************************
 
@@ -678,4 +684,21 @@ def erasing(magnitude_factors_dic,magnitude_factors_index,pilo_imgs):
 
         pilo_imgs_temp.append(image_augmented)
         magnitude_factors_index += 2
+    return pilo_imgs_temp, magnitude_factors_index
+
+def jpg_compression(magnitude_factors,magnitude_factors_index,pilo_imgs):
+    pilo_imgs_temp = []
+    min_compression = 10
+    max_compression = 100 - min_compression
+    height, width = pilo_imgs[0].size
+
+    # for each image in the list do
+    for key, image in enumerate(pilo_imgs):
+        qf=int((magnitude_factors[magnitude_factors_index]/2+0.5)*max_compression + min_compression) # compression range from [10 90]
+        outputIoStream = BytesIO()
+        image.save(outputIoStream, "JPEG", quality=qf, optimice=True)
+        outputIoStream.seek(0)
+        image_augmented=PIL.Image.open(outputIoStream)
+        pilo_imgs_temp.append(image_augmented)
+        magnitude_factors_index += 1
     return pilo_imgs_temp, magnitude_factors_index

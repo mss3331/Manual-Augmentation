@@ -167,8 +167,8 @@ def ManualAugmentationExperiments(batch_size, model_name,orig_aug_ratio_dic):
                      "Random Contrast [0.5 1.5]", "Random Translate [0.3 0.3]", "Mix"]
     # No augmentation is not used since it would have the same results as augmentations above
     #augmentations = ["Random Rotation [-90 +90] Resized","Random Contrast [0.75 1.25]", "Random Translate [0.15 0.15]", "Mix"]
-    augmentations = ["Erasing [0.1 0.5]"]
-    #augmentations = ["Random Translate [0.3 0.3]"]
+    augmentations = ["Random Rotation Cropping [-180 +180]","Erasing [0.1 0.5]","JPG Compression [10 100]"]
+    augmentations = ["JPG Compression [10 100]"]
 
     for augmentation_type in augmentations :
         variouse_datasets_loader=[]
@@ -202,7 +202,7 @@ if __name__ == '__main__':
     feature_extract = False
     # Number of epochs to train for
     num_epochs = 10
-    orig_aug_ratio_dic={"original":0,"augmentation":1}
+    orig_aug_ratio_dic={"original":1,"augmentation":1}
     effective_batch_size = 25
     target_batch_size = 25
     #assert(effective_batch_size<=target_batch_size)
