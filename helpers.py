@@ -508,7 +508,7 @@ def augment(pilo_imgs, augmentation_type,magnitude_factors_dic,magnitude_factors
     next_random_index = 0
 #********************** AUGMENTATION METHODS ********************************
     # Rotate Images
-    if augmentation_type.find("Rotation") >= 0:
+    if augmentation_type.find("Rotation [") >= 0:
         pilo_imgs = rotate(magnitude_factors,magnitude_factors_index,pilo_imgs)
         next_random_index = magnitude_factors_index + len(pilo_imgs)  # What is the index of the augmentation factor for the next upcoming batch
 
@@ -524,6 +524,16 @@ def augment(pilo_imgs, augmentation_type,magnitude_factors_dic,magnitude_factors
     elif augmentation_type.find("Mix") >=0:
         pilo_imgs, new_index = mix(magnitude_factors_dic, magnitude_factors_index, pilo_imgs)
         next_random_index = new_index
+
+    # Rotate Images cropped
+    elif augmentation_type.find("Rotation Cropped") >= 0:
+        pilo_imgs = rotate_cropped(magnitude_factors, magnitude_factors_index, pilo_imgs)
+        next_random_index = magnitude_factors_index + len(pilo_imgs)  # What is the index of the augmentation factor for the next upcoming batch
+
+    # Random erasing Images cropped
+    elif augmentation_type.find("Erasing") >= 0:
+        pilo_imgs = erasing(magnitude_factors, magnitude_factors_index, pilo_imgs)
+        next_random_index = magnitude_factors_index + len(pilo_imgs)  # What is the index of the augmentation factor for the next upcoming batch
 
 #********************** END OF AUGMENTATION METHODS ***************************
 
@@ -592,10 +602,12 @@ def rotate(magnitude_factors,magnitude_factors_index,pilo_imgs):
     pilo_imgs = [TF.rotate(image, magnitude_factors[key + magnitude_factors_index] * 180, expand=True) for
                  key, image in enumerate(pilo_imgs)]
     return pilo_imgs
+
 def contrast(magnitude_factors,magnitude_factors_index,pilo_imgs):
     pilo_imgs = [TF.adjust_contrast(image, magnitude_factors[key + magnitude_factors_index] / 2 + 1) for key, image in
                  enumerate(pilo_imgs)]
     return pilo_imgs
+
 def translate(magnitude_factors,magnitude_factors_index,pilo_imgs):
     pilo_imgs_temp = []
     translate_ratio = [0.3, 0.3]
@@ -639,3 +651,36 @@ def mix(magnitude_factors_dic, magnitude_factors_index, pilo_imgs):
 
 
     return pilo_imgs
+
+def rotate_cropped(magnitude_factors,magnitude_factors_index,pilo_imgs):
+    pilo_imgs = [TF.rotate(image, magnitude_factors[key + magnitude_factors_index] * 180, expand=False) for
+                 key, image in enumerate(pilo_imgs)]
+    return pilo_imgs
+
+def erasing(magnitude_factors,magnitude_factors_index,pilo_imgs):
+    pilo_imgs_temp = []
+    box_h_w = [0.3, 0.3]
+    height, width = pilo_imgs[0].size
+    # for each image in the list do
+    # for key, image in enumerate(pilo_imgs):
+    #     y,x = [(magnitude_factors[magnitude_factors_index] +1)/2, (magnitude_factors[magnitude_factors_index+1]+1)/2] # +1 and /2 to shift the augmentatino range to be 0 to 2 and 0 1 respecti
+    #     image_augmented = pilo_imgs.copy()
+    #     image_augmented[:, y:int(y*255)]
+    #     image_augmented = TF.erase(image, translate=[
+    #         height * magnitude_factors[magnitude_factors_index] * translate_ratio[0],
+    #         width * magnitude_factors[magnitude_factors_index + 1] * translate_ratio[1]],
+    #                                 angle=0, scale=1, shear=0)
+    #     pilo_imgs_temp.append(image_augmented)
+    #     magnitude_factors_index += 2
+
+    # for each image in the list do
+    for key, image in enumerate(pilo_imgs):
+        y = ((magnitude_factors[magnitude_factors_index]/2+0.5) * height) // 1
+        x = ((magnitude_factors[magnitude_factors_index+1]/2+0.5) * width) // 1
+        image_augmented = image.copy()
+        for i in range(box_h_w[0] * height): #
+            for j in range(box_h_w[1] * width):
+                image_augmented[y+i, x:x+box_h_w[1] * width] = (0,0,0)
+        pilo_imgs_temp.append(image_augmented)
+        magnitude_factors_index += 2
+    return pilo_imgs_temp, magnitude_factors_index
