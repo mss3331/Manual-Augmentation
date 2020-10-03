@@ -13,6 +13,8 @@ from torchvision import models, transforms, datasets
 from torch.utils.data.sampler import SubsetRandomSampler
 from torch.utils.data import ConcatDataset
 from io import BytesIO
+from scipy.ndimage.interpolation import map_coordinates
+from scipy.ndimage.filters import gaussian_filter
 import torchvision.transforms.functional as TF
 from torch.utils.data.sampler import SequentialSampler
 import MyInception
@@ -368,7 +370,7 @@ def train_model_manual_augmentation(model, dataloaders, criterion, optimizer,num
                     sub_batch_labels = sub_batchs_labels[sub_batch_index]
                     # show the orig and aug images if 1:1 is applied or show the first and second batch images otherwise
                     # if phase == "train" and sub_batch<=0:
-                    #     Data_Related_Methods.imshow(sub_batch_inputs, num_images=4)
+                    #     Data_Related_Methods.imshow(sub_batch_inputs, num_images=10)
                     #     sub_batch+=1
 
 
@@ -540,6 +542,9 @@ def augment(pilo_imgs, augmentation_type,magnitude_factors_dic,magnitude_factors
     elif augmentation_type.find("JPG") >= 0:
         pilo_imgs, new_index = jpg_compression(magnitude_factors, magnitude_factors_index, pilo_imgs)
         next_random_index = new_index
+    elif augmentation_type.find("Elastic") >=0:
+        pilo_imgs, new_index = elasticity(magnitude_factors_dic, magnitude_factors_index, pilo_imgs, image_size)
+        next_random_index = new_index
 
 #********************** END OF AUGMENTATION METHODS ***************************
 
@@ -671,7 +676,7 @@ def erasing(magnitude_factors_dic,magnitude_factors_index,pilo_imgs):
     height, width = pilo_imgs[0].size
     # for each image in the list do
     for key, image in enumerate(pilo_imgs):
-        box_h_w = [0.4 * (random_probability[magnitude_factors_index]+0.25), 0.4*(random_probability[magnitude_factors_index+1]+0.25)] # this calculation to make th box range from 0.1 to 0.5
+        box_h_w = [0.4 * (random_probability[magnitude_factors_index]+0.1), 0.4*(random_probability[magnitude_factors_index+1]+0.1)] # this calculation to make th box range from 0.1 to 0.5
         y = int((magnitude_factors[magnitude_factors_index]/2+0.5) * height)
         x = int((magnitude_factors[magnitude_factors_index+1]/2+0.5) * width)
         image_augmented = image.copy()
@@ -702,3 +707,92 @@ def jpg_compression(magnitude_factors,magnitude_factors_index,pilo_imgs):
         pilo_imgs_temp.append(image_augmented)
         magnitude_factors_index += 1
     return pilo_imgs_temp, magnitude_factors_index
+
+def mix2(magnitude_factors_dic, magnitude_factors_index, pilo_imgs):
+    magnitude_factors = magnitude_factors_dic["augmentation factors"]
+    random_probability = magnitude_factors_dic["random probability"]
+    pilo_imgs_temp = []
+    translate_ratio = [0.3, 0.3]
+    height, width = pilo_imgs[0].size
+
+    # for each image in the list do
+    for key, image in enumerate(pilo_imgs):
+        which_augmentation = (random_probability[magnitude_factors_index] * 4) // 1 #// 1 for cielling only
+        if which_augmentation == 0 : # No augmentation
+            image_augmented = image
+        elif which_augmentation == 1 : # Rotation
+            image_augmented = TF.rotate(image, magnitude_factors[magnitude_factors_index] * 180, expand=False)
+        elif which_augmentation == 2:  # Erasing
+            box_h_w = [0.4 * (random_probability[magnitude_factors_index] + 0.1), 0.4 * (random_probability[
+                                                                                             magnitude_factors_index + 1] + 0.1)]  # this calculation to make th box range from 0.1 to 0.5
+            y = int((magnitude_factors[magnitude_factors_index] / 2 + 0.5) * height)
+            x = int((magnitude_factors[magnitude_factors_index + 1] / 2 + 0.5) * width)
+            image_augmented = image.copy()
+            for i in range(int(box_h_w[0] * height)):  #
+                for j in range(int(box_h_w[1] * width)):
+                    if y + i >= height or x + j >= width:  # if the box beyond the image range continue
+                        continue
+                    image_augmented.putpixel((y + i, x + j), (np.random.randint(0, 256), np.random.randint(0, 256), np.random.randint(0, 256)))
+            magnitude_factors_index += 1 # we need to increment the index here as wel as at the end of the elif
+
+        elif which_augmentation >= 3 : # JPG compression
+            image_augmented = TF.affine(image, translate=[height * magnitude_factors[magnitude_factors_index] * translate_ratio[0],width * magnitude_factors[magnitude_factors_index+1] * translate_ratio[1]],angle=0, scale=1, shear=0)
+            magnitude_factors_index += 1 #we used two augmentatino slots so we need to update the index
+
+        pilo_imgs_temp.append(image_augmented)
+        magnitude_factors_index += 1
+    return pilo_imgs_temp, magnitude_factors_index
+
+
+    return pilo_imgs
+def elasticity(magnitude_factors_dic,magnitude_factors_index,pilo_imgs, target_size):
+    '''the alpha=image widht * 2
+            the sigma = [10 20]'''
+    magnitude_factors = magnitude_factors_dic["augmentation factors"]
+    random_probability = magnitude_factors_dic["random probability"]
+    pilo_imgs_temp = []
+
+    height, width = pilo_imgs[0].size
+    min = 10
+    max = 20
+    # for each image in the list do
+    for key, image in enumerate(pilo_imgs):
+        image_augmented = TF.resize(image,target_size)
+        image_augmented = image_augmented.copy()
+        image_augmented = elastic_transform_color(np.asarray(image_augmented),width*2,(magnitude_factors[magnitude_factors_index]/2+0.5)*(max-min)+min) # the range of sigma is between 10 and 20
+        image_augmented = PIL.Image.fromarray(image_augmented)
+        pilo_imgs_temp.append(image_augmented)
+        magnitude_factors_index += 1
+    return pilo_imgs_temp, magnitude_factors_index
+
+def elastic_transform_color(image, alpha_range, sigma, random_state=None):
+    """Elastic deformation of images as described in [Simard2003]_.
+    .. [Simard2003] Simard, Steinkraus and Platt, "Best Practices for
+       Convolutional Neural Networks applied to Visual Document Analysis", in
+       Proc. of the International Conference on Document Analysis and
+       Recognition, 2003.
+
+   # Arguments
+       image: Numpy array with shape (height, width, channels).
+       alpha_range: Float for fixed value or [lower, upper] for random value from uniform distribution.
+           Controls intensity of deformation.
+       sigma: Float, sigma of gaussian filter that smooths the displacement fields.
+       random_state: `numpy.random.RandomState` object for generating displacement fields.
+    """
+
+    if random_state is None:
+        random_state = np.random.RandomState(None)
+
+    if np.isscalar(alpha_range):
+        alpha = alpha_range
+    else:
+        alpha = np.random.uniform(low=alpha_range[0], high=alpha_range[1])
+
+    shape = image.shape
+    dx = gaussian_filter((random_state.rand(*shape) * 2 - 1), sigma) * alpha
+    dy = gaussian_filter((random_state.rand(*shape) * 2 - 1), sigma) * alpha
+
+    x, y, z = np.meshgrid(np.arange(shape[0]), np.arange(shape[1]), np.arange(shape[2]), indexing='ij')
+    indices = np.reshape(x + dx, (-1, 1)), np.reshape(y + dy, (-1, 1)), np.reshape(z, (-1, 1))
+
+    return map_coordinates(image, indices, order=1, mode='reflect').reshape(shape)
