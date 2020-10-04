@@ -142,8 +142,8 @@ def get_dataset_withSpecificTransform(input_size, data_dir, specific_transform=N
 def ManualAugmentationExperiments(batch_size, model_name,orig_aug_ratio_dic):
     print("Manual Augmentation is running ....")
     #data_dir = "C:/Users/Mahmood_Haithami/Downloads/JDownloader/Databases/KvasirV1_WithBlackBox_HE_0.3GB" # Windows
-    data_dir = "C:/Users/Mahmood_Haithami/Downloads/JDownloader/Databases/KvasirV1_Unified" # Windows
-    #data_dir = "~/Documents/Mahmood/Databases/KvasirV1_Unified"
+    #data_dir = "C:/Users/Mahmood_Haithami/Downloads/JDownloader/Databases/KvasirV1_Unified" # Windows
+    data_dir = "~/Documents/Mahmood/Databases/KvasirV1_Unified"
 
     # Initialize the model for this run
     model, input_size = helpers.getModel(model_name, num_classes, feature_extract, create_new = False ,use_pretrained=False)
@@ -169,7 +169,8 @@ def ManualAugmentationExperiments(batch_size, model_name,orig_aug_ratio_dic):
     #augmentations = ["Random Rotation [-90 +90] Resized","Random Contrast [0.75 1.25]", "Random Translate [0.15 0.15]", "Mix"]
     #augmentations = ["Random Rotation Cropping [-180 +180]","Erasing [0.1 0.5]","JPG Compression [10 100]"]
     #augmentations = ["JPG Compression [10 100]"]
-    augmentations = ["Elastic [10 20]"]
+    #augmentations = ["Elastic [10 20]"]
+    augmentations = ["Elastic [10 20]","Mix2"]
 
     for augmentation_type in augmentations :
         variouse_datasets_loader=[]
@@ -189,7 +190,7 @@ if __name__ == '__main__':
     torch.backends.cudnn.benchmark = False
     random.seed(0)
     # Models to choose from [resnet, alexnet, vgg, squeezenet, densenet, inception]
-    model_name = "densenet"
+    model_name = "inception"
     #which indecies to consider
     read_from_file = "./dataset1_dataset2_KvasirV1.csv"
     # train set percintage
@@ -202,10 +203,10 @@ if __name__ == '__main__':
     #   when True we only update the reshaped layer params
     feature_extract = False
     # Number of epochs to train for
-    num_epochs = 10
+    num_epochs = 1
     orig_aug_ratio_dic={"original":0,"augmentation":1}
-    effective_batch_size = 10
-    target_batch_size = 10
+    effective_batch_size = 25
+    target_batch_size = 25
     #assert(effective_batch_size<=target_batch_size)
 
     batch_size_dic = {"effective_batch_size":effective_batch_size, "target_batch_size":target_batch_size}

@@ -369,9 +369,9 @@ def train_model_manual_augmentation(model, dataloaders, criterion, optimizer,num
                     sub_batch_inputs = sub_batchs_images[sub_batch_index]
                     sub_batch_labels = sub_batchs_labels[sub_batch_index]
                     # show the orig and aug images if 1:1 is applied or show the first and second batch images otherwise
-                    # if phase == "train" and sub_batch<=0:
-                    #     Data_Related_Methods.imshow(sub_batch_inputs, num_images=10)
-                    #     sub_batch+=1
+                    if phase == "train" and sub_batch<=0:
+                        Data_Related_Methods.imshow(sub_batch_inputs, num_images=10)
+                        sub_batch+=1
 
 
                     inputs = sub_batch_inputs.to(device)#this line cuase error if I don't have enough space in my GPU
@@ -525,7 +525,7 @@ def augment(pilo_imgs, augmentation_type,magnitude_factors_dic,magnitude_factors
         pilo_imgs, new_index = translate(magnitude_factors,magnitude_factors_index,pilo_imgs)
         next_random_index = new_index
 
-    elif augmentation_type.find("Mix") >=0:
+    elif augmentation_type.find("Mix1") >=0:
         pilo_imgs, new_index = mix(magnitude_factors_dic, magnitude_factors_index, pilo_imgs)
         next_random_index = new_index
 
@@ -544,6 +544,9 @@ def augment(pilo_imgs, augmentation_type,magnitude_factors_dic,magnitude_factors
         next_random_index = new_index
     elif augmentation_type.find("Elastic") >=0:
         pilo_imgs, new_index = elasticity(magnitude_factors_dic, magnitude_factors_index, pilo_imgs, image_size)
+        next_random_index = new_index
+    elif augmentation_type.find("Mix2") >=0:
+        pilo_imgs, new_index = mix2(magnitude_factors_dic, magnitude_factors_index, pilo_imgs, image_size)
         next_random_index = new_index
 
 #********************** END OF AUGMENTATION METHODS ***************************
@@ -708,38 +711,60 @@ def jpg_compression(magnitude_factors,magnitude_factors_index,pilo_imgs):
         magnitude_factors_index += 1
     return pilo_imgs_temp, magnitude_factors_index
 
-def mix2(magnitude_factors_dic, magnitude_factors_index, pilo_imgs):
+def mix2(magnitude_factors_dic, magnitude_factors_index, pilo_imgs,target_size):
     magnitude_factors = magnitude_factors_dic["augmentation factors"]
     random_probability = magnitude_factors_dic["random probability"]
     pilo_imgs_temp = []
-    translate_ratio = [0.3, 0.3]
     height, width = pilo_imgs[0].size
 
     # for each image in the list do
     for key, image in enumerate(pilo_imgs):
-        which_augmentation = (random_probability[magnitude_factors_index] * 4) // 1 #// 1 for cielling only
+        which_augmentation = (random_probability[magnitude_factors_index] * 5) // 1 #// 1 for cielling only
+
         if which_augmentation == 0 : # No augmentation
             image_augmented = image
+            pilo_imgs_temp.append(image_augmented)
         elif which_augmentation == 1 : # Rotation
             image_augmented = TF.rotate(image, magnitude_factors[magnitude_factors_index] * 180, expand=False)
+            pilo_imgs_temp.append(image_augmented)
+
         elif which_augmentation == 2:  # Erasing
-            box_h_w = [0.4 * (random_probability[magnitude_factors_index] + 0.1), 0.4 * (random_probability[
-                                                                                             magnitude_factors_index + 1] + 0.1)]  # this calculation to make th box range from 0.1 to 0.5
+            box_h_w = [0.4 * (random_probability[magnitude_factors_index] + 0.1), 0.4 * (random_probability[magnitude_factors_index + 1] + 0.1)]  # this calculation to make th box range from 0.1 to 0.5
+            #starting point y,x
             y = int((magnitude_factors[magnitude_factors_index] / 2 + 0.5) * height)
             x = int((magnitude_factors[magnitude_factors_index + 1] / 2 + 0.5) * width)
-            image_augmented = image.copy()
-            for i in range(int(box_h_w[0] * height)):  #
-                for j in range(int(box_h_w[1] * width)):
-                    if y + i >= height or x + j >= width:  # if the box beyond the image range continue
-                        continue
-                    image_augmented.putpixel((y + i, x + j), (np.random.randint(0, 256), np.random.randint(0, 256), np.random.randint(0, 256)))
+            #box shape
+            box_height = int(box_h_w[0] * height)
+            box_width = int(box_h_w[1] * width)
+            if box_height+y> height:
+                box_height -= (box_height+y - height)
+            if box_width+x> width:
+                box_width -= (box_width+x - width)
+            image_augmented = np.array(image.copy())
+            image_augmented[y:y+box_height,x:x+box_width,:] = np.random.randint(0, 256,(box_height,box_width,3))
+            image_augmented = PIL.Image.fromarray(image_augmented)
+            pilo_imgs_temp.append(image_augmented)
             magnitude_factors_index += 1 # we need to increment the index here as wel as at the end of the elif
 
-        elif which_augmentation >= 3 : # JPG compression
-            image_augmented = TF.affine(image, translate=[height * magnitude_factors[magnitude_factors_index] * translate_ratio[0],width * magnitude_factors[magnitude_factors_index+1] * translate_ratio[1]],angle=0, scale=1, shear=0)
-            magnitude_factors_index += 1 #we used two augmentatino slots so we need to update the index
+        elif which_augmentation == 3 : # JPG compression
+            min_compression = 10
+            max_compression = 100 - min_compression
+            qf = int((magnitude_factors[magnitude_factors_index] / 2 + 0.5) * max_compression + min_compression)  # compression range from [10 90]
+            outputIoStream = BytesIO()
+            image.save(outputIoStream, "JPEG", quality=qf, optimice=True)
+            outputIoStream.seek(0)
+            image_augmented = PIL.Image.open(outputIoStream)
+            pilo_imgs_temp.append(image_augmented)
 
-        pilo_imgs_temp.append(image_augmented)
+        elif which_augmentation >= 4 : # Elastic
+            min = 10
+            max = 20
+            alpha = width * 2
+            image_augmented = TF.resize(image, target_size)
+            image_augmented = image_augmented.copy()
+            image_augmented = elastic_transform_color(image_augmented, alpha,(magnitude_factors[magnitude_factors_index] / 2 + 0.5) * (max - min) + min)  # the range of sigma is between 10 and 20
+            pilo_imgs_temp.append(image_augmented)
+
         magnitude_factors_index += 1
     return pilo_imgs_temp, magnitude_factors_index
 
@@ -755,12 +780,12 @@ def elasticity(magnitude_factors_dic,magnitude_factors_index,pilo_imgs, target_s
     height, width = pilo_imgs[0].size
     min = 10
     max = 20
+    alpha = width*2
     # for each image in the list do
     for key, image in enumerate(pilo_imgs):
         image_augmented = TF.resize(image,target_size)
         image_augmented = image_augmented.copy()
-        image_augmented = elastic_transform_color(np.asarray(image_augmented),width*2,(magnitude_factors[magnitude_factors_index]/2+0.5)*(max-min)+min) # the range of sigma is between 10 and 20
-        image_augmented = PIL.Image.fromarray(image_augmented)
+        image_augmented = elastic_transform_color(image_augmented,alpha,(magnitude_factors[magnitude_factors_index]/2+0.5)*(max-min)+min) # the range of sigma is between 10 and 20
         pilo_imgs_temp.append(image_augmented)
         magnitude_factors_index += 1
     return pilo_imgs_temp, magnitude_factors_index
@@ -779,7 +804,7 @@ def elastic_transform_color(image, alpha_range, sigma, random_state=None):
        sigma: Float, sigma of gaussian filter that smooths the displacement fields.
        random_state: `numpy.random.RandomState` object for generating displacement fields.
     """
-
+    image = np.asarray(image)#convert PIL image to numpy array
     if random_state is None:
         random_state = np.random.RandomState(None)
 
@@ -795,4 +820,4 @@ def elastic_transform_color(image, alpha_range, sigma, random_state=None):
     x, y, z = np.meshgrid(np.arange(shape[0]), np.arange(shape[1]), np.arange(shape[2]), indexing='ij')
     indices = np.reshape(x + dx, (-1, 1)), np.reshape(y + dy, (-1, 1)), np.reshape(z, (-1, 1))
 
-    return map_coordinates(image, indices, order=1, mode='reflect').reshape(shape)
+    return PIL.Image.fromarray(map_coordinates(image, indices, order=1, mode='reflect').reshape(shape))
