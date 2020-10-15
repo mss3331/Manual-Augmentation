@@ -10,11 +10,52 @@ from scipy.ndimage.filters import gaussian_filter
 from skimage import io, data
 from PIL import Image
 
+def iso_elastic(image,outward,y_x_location, sigma,kernel_length=100, show_Mag_surf=False):
+    '''sigma should be from 20 to 45'''
+    # location of the effect in the image
+    #x_y_shift = (270, 70)
+    y_x_shift = list(y_x_location) # location of the elasticity
+    #y_x_shift = [70, 270]
+    shape = image.shape
+
+    # check if the location of elastic within the image borders
+    if (y_x_shift[0] + kernel_length) >= shape[0]:
+        y_x_shift[0] = shape[0] - kernel_length
+    if (y_x_shift[1] + kernel_length) >= shape[1]:
+        y_x_shift[1] = shape[1] - kernel_length
+
+    dx = np.zeros(shape)
+    dy = np.zeros(shape)
+
+    shperical_gaus_kernel_y_axis, shperical_gaus_kernel_x_axis = getKern(l=kernel_length, sig=sigma)
+
+    gaussina_kernel_3D_x_xis = np.repeat(shperical_gaus_kernel_x_axis[:, :, np.newaxis], 3, axis=2)
+
+    gaussina_kernel_3D_y_xis = np.repeat(shperical_gaus_kernel_y_axis[:, :, np.newaxis], 3, axis=2)
+
+    if not outward:
+        gaussina_kernel_3D_x_xis *= -1
+        gaussina_kernel_3D_y_xis *= -1
+
+    dx[y_x_shift[0]:y_x_shift[0] + kernel_length, y_x_shift[1]:+y_x_shift[1] + kernel_length,:] = gaussina_kernel_3D_x_xis
+    dy[y_x_shift[0]:y_x_shift[0] + kernel_length, y_x_shift[1]:+y_x_shift[1] + kernel_length,:] = gaussina_kernel_3D_y_xis
+    dx = gaussian_filter((dx), sigma)
+    dy = gaussian_filter((dy), sigma)
+
+    if show_Mag_surf:#show the magnitude graph surface
+        show_3d(dy[50:300, 50:450, :], dx[50:300, 50:450, :])
+
+    y, x, z = np.meshgrid(np.arange(shape[0]), np.arange(shape[1]), np.arange(shape[2]), indexing='ij')
+    indices = np.reshape(y + dy, (-1, 1)), np.reshape(x + dx, (-1, 1)), np.reshape(z, (-1, 1))
+
+    return map_coordinates(image, indices, order=1).reshape(shape)
+
 
 def modif_elastic(image, kernel_length, sigma):
-    print("sigma is :",sigma)
+    print("sigma is :",sigma*3)
     #location of the effect in the image
     x_y_shift = (270,70)
+    x_y_shift = (400,70)
 
     shape = image.shape
 
@@ -33,7 +74,6 @@ def modif_elastic(image, kernel_length, sigma):
     dy[x_y_shift[1]:x_y_shift[1]+kernel_length,x_y_shift[0]:+x_y_shift[0]+kernel_length,:] = gaussina_kernel_3D_y_xis
     dx=gaussian_filter((dx), sigma*3)
     dy=gaussian_filter((dy), sigma*3)
-    print(dy.shape,dx.shape)
     show_3d(dy[50:300,50:450,:],dx[50:300,50:450,:])
     y, x, z = np.meshgrid(np.arange(shape[0]), np.arange(shape[1]), np.arange(shape[2]), indexing='ij')
     indices = np.reshape(y + dy, (-1, 1)), np.reshape(x + dx, (-1, 1)), np.reshape(z, (-1, 1))
@@ -48,67 +88,14 @@ def getKern_perfectImlementation(l=5, sig=1):
     kernel /= np.sum(kernel)
     '''End of basic gaussian kernel'''
     kernel =np.max(kernel)- kernel #flip the gaussian
-    return kernel
-def getKern(l=5, sig=1.):
-    """\
-    creates gaussian kernel with side length l and a sigma of sig
-    """
-
-    ax = np.linspace(-(l - 1) / 2., (l - 1) / 2., l)
-    xx, yy = np.meshgrid(ax, ax)
-
-    kernel = np.exp(-0.5 * (np.square(xx) + np.square(yy)) / np.square(sig))
-
+    kernel *= l**2 #make the largest diplacement is the kernel size
     kernel /= np.sum(kernel)
-    '''End of basic gaussian kernel'''
-    #--------------------------------------------------------------------------------------------------------
-    '''We will try to use gaussian distribution with a sum of l**2'''
-    # kernel*=l**2/np.sqrt(2) # this normalization to make the displacment of both dx and dy equal to l**2
-    #
-    # print("The diplacement sum should be",np.sum(kernel))
-    # show_3d(kernel,kernel)
-    # return kernel
-    #---------------------------------------------------------------------------------------------------------
-    #--------------------------------------------------------------------------------------------------------
-    ##kernel /= np.max(kernel) #normalize the guassian matrix to manipulate the highest diplacement
-    ##highest_diplacement = 30
-    ##total_displacment = highest_diplacement/np.sqrt(2)
+    print(np.sum(kernel))
+    dx_kernel = sphere_kernel(kernel)
+    dy_kernel = sphere_kernel(kernel, False)
 
-    # kernel *= (total_displacement/sig)
-
-    ##kernel = np.multiply(total_displacment,kernel)
-    # show_3d(kernel,kernel)
-
-    #kernel *= kernel * total_displacement  # always the sum of the displacements will be half the kernel width
-
-
-    #kernel *= l**2
-    ##max = np.max(kernel)
-    #kernel /= max #to normalize the kernel
-    # kernel = 1- kernel #to flip the gaussian
-    #kernel *= int(l/2) #to make the farthest displacement equal to the quarter of the kernel width
-    #print(kernel)
-
-    ## kernel = max-kernel
-    #------------------------------------------------------------------------------------------------------
-    '''we want to minimize the diplacement as we approach the middle of the kenrel
-        therefore, we are going to use distance matrix to always achieve this condition'''
-    # distance_mat = createDistanceMatrix(l, l)
-    # distance_mat = distance_mat ** (5 / sig)
-    # distance_mat *= 30 / np.sqrt(2)
-    # return distance_mat
-    # kernel *= distance_mat**(5/sig)
-    # show_3d(distance_mat**(5/sig),distance_mat**(5/sig))
-    # print(distance_mat[:3, :3])
-    # print(kernel[:3, :3])
-    # kernel *= distance_mat
-    # print(kernel[:3, :3])
-    #kernel *= -1 #minimizing glass effect
-
-    #cosine_diplacement =  sig/np.sqrt(2) - np.cos(distance_mat*(np.pi*2.5))*(sig/np.sqrt(2))
-    # return kernel
-    #show_3d(cosine_diplacement,cosine_diplacement)
-    #return cosine_diplacement
+    return dy_kernel, dx_kernel
+def getKern(l=5, sig=1.):
     #--------------------------------------------------------------
     # #this one is good with gaussian (first candidate)
     distance_mat = createDistanceMatrix(l, l)
@@ -121,19 +108,8 @@ def getKern(l=5, sig=1.):
     dx_kernel = sphere_kernel(distance_mat)
     dy_kernel = sphere_kernel(distance_mat,False)
 
-    return -dy_kernel, -dx_kernel
-    #--------------------------------------------------------------
-    #-------------------------------------------------------------
-    # This one is a second candidate
-    # distance_mat = createDistanceMatrix(l, l)**0.2
-    # distance_mat *=(l/2)/np.sqrt(2)
-    # return distance_mat
-    #----------------------------------------------------------------
-    # This one is a deviation from the second candidate
-    # distance_mat = createDistanceMatrix(l, l)
-    # distance_mat *=(l/2)/np.sqrt(2)
-    # return distance_mat
-    #----------------------------------------------------------------
+    return dy_kernel, dx_kernel
+
 
 def sphere_kernel(kernel_orig,x_axis=True):
     '''This function accept guassian kernel and modify it to make it spherical'''
@@ -179,7 +155,7 @@ def show_3d(dy,dx):
                            linewidth=0, antialiased=False)
 
     # Customize the z axis.
-    # ax.set_zlim(np.min(R),np.max(R))
+    ax.set_zlim(0,25)
     # ax.zaxis.set_major_locator(LinearLocator(10))
     # ax.zaxis.set_major_formatter(FormatStrFormatter('%.02f'))
 
@@ -201,7 +177,8 @@ def createDistanceMatrix(x_size,y_size):
 if __name__=="__main__":
     img = data.chelsea()
     img =Image.fromarray(img)
-    for i in range(1,20):
-        i=Image.fromarray(modif_elastic(np.asarray(img),kernel_length=100,sigma=i))
+    for i in range(7,16):
+        print(i,)
+        i=Image.fromarray(iso_elastic(np.asarray(img),outward=False,y_x_location=(0,400),sigma=i))
         i.show()
 
