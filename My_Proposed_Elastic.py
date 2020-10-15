@@ -11,90 +11,44 @@ from skimage import io, data
 from PIL import Image
 
 
-def elastic_transform(image, alpha, sigma, random_state=None):
-    """Elastic deformation of images as described in [Simard2003]_.
-    .. [Simard2003] Simard, Steinkraus and Platt, "Best Practices for
-       Convolutional Neural Networks applied to Visual Document Analysis", in
-       Proc. of the International Conference on Document Analysis and
-       Recognition, 2003.
-    """
-    if random_state is None:
-        random_state = np.random.RandomState(None)
-
-    shape = image.shape
-    dx = gaussian_filter((random_state.rand(*shape) * 2 - 1), sigma, mode="constant", cval=0) * alpha
-    dy = gaussian_filter((random_state.rand(*shape) * 2 - 1), sigma, mode="constant", cval=0) * alpha
-
-    x, y = np.meshgrid(np.arange(shape[0]), np.arange(shape[1]))
-    indices = np.reshape(y+dy, (-1, 1)), np.reshape(x+dx, (-1, 1))
-
-    return map_coordinates(image, indices, order=1).reshape(shape)
-
-
-def elastic_transform_color(image, alpha_range, sigma, random_state=None):
-    """Elastic deformation of images as described in [Simard2003]_.
-    .. [Simard2003] Simard, Steinkraus and Platt, "Best Practices for
-       Convolutional Neural Networks applied to Visual Document Analysis", in
-       Proc. of the International Conference on Document Analysis and
-       Recognition, 2003.
-
-   # Arguments
-       image: Numpy array with shape (height, width, channels).
-       alpha_range: Float for fixed value or [lower, upper] for random value from uniform distribution.
-           Controls intensity of deformation.
-       sigma: Float, sigma of gaussian filter that smooths the displacement fields.
-       random_state: `numpy.random.RandomState` object for generating displacement fields.
-    """
-
-    if random_state is None:
-        random_state = np.random.RandomState(None)
-
-    if np.isscalar(alpha_range):
-        alpha = alpha_range
-    else:
-        alpha = np.random.uniform(low=alpha_range[0], high=alpha_range[1])
-
-    shape = image.shape
-    dx = gaussian_filter((random_state.rand(*shape) * 2 - 1), sigma) * alpha
-    dy = gaussian_filter((random_state.rand(*shape) * 2 - 1), sigma) * alpha
-
-    x, y, z = np.meshgrid(np.arange(shape[0]), np.arange(shape[1]), np.arange(shape[2]), indexing='ij')
-    indices = np.reshape(x + dx, (-1, 1)), np.reshape(y + dy, (-1, 1)), np.reshape(z, (-1, 1))
-
-    return map_coordinates(image, indices, order=1, mode='reflect').reshape(shape)
-
 def modif_elastic(image, kernel_length, sigma):
     print("sigma is :",sigma)
     #location of the effect in the image
-    x_y_shift = (150,60)
+    x_y_shift = (270,70)
 
     shape = image.shape
 
     dx = np.zeros(shape)
     dy = np.zeros(shape)
 
-    gaussian_kernel = getKern(l=kernel_length, sig=sigma)
+    shperical_gaus_kernel_y_axis, shperical_gaus_kernel_x_axis = getKern(l=kernel_length, sig=sigma)
 
-    shperical_gaus_kernel_x_axis = sphere_kernel(gaussian_kernel)
-    #shperical_gaus_kernel_x_axis = gaussian_filter((shperical_gaus_kernel_x_axis), 5,mode="nearest")
 
     gaussina_kernel_3D_x_xis = np.repeat(shperical_gaus_kernel_x_axis[:, :, np.newaxis], 3, axis=2)
 
-    shperical_gaus_kernel_y_axis = sphere_kernel(gaussian_kernel,False)
-    #shperical_gaus_kernel_y_axis = gaussian_filter(shperical_gaus_kernel_y_axis,5,mode="nearest")
-    #show_3d(shperical_gaus_kernel_y_axis,shperical_gaus_kernel_x_axis)
+
     gaussina_kernel_3D_y_xis = np.repeat(shperical_gaus_kernel_y_axis[:, :, np.newaxis], 3, axis=2)
 
     dx[x_y_shift[1]:x_y_shift[1]+kernel_length,x_y_shift[0]:+x_y_shift[0]+kernel_length,:] = gaussina_kernel_3D_x_xis
     dy[x_y_shift[1]:x_y_shift[1]+kernel_length,x_y_shift[0]:+x_y_shift[0]+kernel_length,:] = gaussina_kernel_3D_y_xis
     dx=gaussian_filter((dx), sigma*3)
     dy=gaussian_filter((dy), sigma*3)
-    show_3d(dy[:200,:200,:],dx[:200,:200,:])
+    print(dy.shape,dx.shape)
+    show_3d(dy[50:300,50:450,:],dx[50:300,50:450,:])
     y, x, z = np.meshgrid(np.arange(shape[0]), np.arange(shape[1]), np.arange(shape[2]), indexing='ij')
     indices = np.reshape(y + dy, (-1, 1)), np.reshape(x + dx, (-1, 1)), np.reshape(z, (-1, 1))
 
     return map_coordinates(image, indices, order=1).reshape(shape)
+def getKern_perfectImlementation(l=5, sig=1):
+    ax = np.linspace(-(l - 1) / 2., (l - 1) / 2., l)
+    xx, yy = np.meshgrid(ax, ax)
 
+    kernel = np.exp(-0.5 * (np.square(xx) + np.square(yy)) / np.square(sig))
+
+    kernel /= np.sum(kernel)
+    '''End of basic gaussian kernel'''
+    kernel =np.max(kernel)- kernel #flip the gaussian
+    return kernel
 def getKern(l=5, sig=1.):
     """\
     creates gaussian kernel with side length l and a sigma of sig
@@ -162,7 +116,12 @@ def getKern(l=5, sig=1.):
     distance_mat = 1-np.abs(np.cos(distance_mat*np.pi)**2)
 
     distance_mat *= (l/2) / np.sqrt(2)
-    return -distance_mat
+    #distance_mat = -distance_mat #inward
+    distance_mat = distance_mat #outward
+    dx_kernel = sphere_kernel(distance_mat)
+    dy_kernel = sphere_kernel(distance_mat,False)
+
+    return -dy_kernel, -dx_kernel
     #--------------------------------------------------------------
     #-------------------------------------------------------------
     # This one is a second candidate
@@ -243,7 +202,6 @@ if __name__=="__main__":
     img = data.chelsea()
     img =Image.fromarray(img)
     for i in range(1,20):
-
         i=Image.fromarray(modif_elastic(np.asarray(img),kernel_length=100,sigma=i))
         i.show()
 
